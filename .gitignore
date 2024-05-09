@@ -1,0 +1,5 @@
+imageproc/target/*
+raytracer/target/*
+webserver/target/*
+scripts/tmp/*
+scripts/output/*
