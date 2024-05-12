@@ -1,5 +1,8 @@
 imageproc/target/*
 raytracer/target/*
 webserver/target/*
+javassist-wrapper/target/*
 scripts/tmp/*
 scripts/output/*
+aws_config.sh
+.vscode

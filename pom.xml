@@ -16,6 +16,7 @@
 		<module>raytracer</module>
 		<module>imageproc</module>
 		<module>webserver</module>
+		<module>javassist-wrapper</module>
 	</modules>
 
 </project>
