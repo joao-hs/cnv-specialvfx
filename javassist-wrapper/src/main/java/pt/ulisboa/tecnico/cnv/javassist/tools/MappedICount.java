@@ -16,11 +16,6 @@ public class MappedICount extends AbstractJavassistTool {
     private static final Map<String, Integer> methodCallHistogram = new HashMap<>();
 
     /*
-     * Map BasicBlock to corresponding method call
-     */
-    private static final Map<String, String> basicBlockToMethod = new HashMap<>();
-
-    /*
      * Histogram of BasicBlock calls
      */
     private static final Map<String, Integer> basicBlockHistogram = new HashMap<>();
@@ -54,11 +49,16 @@ public class MappedICount extends AbstractJavassistTool {
         methodCallHistogram.forEach((k, v) -> System.out.println(String.format("[%s]     %s: %s", MappedICount.class.getSimpleName(), k, v)));
         System.out.println(String.format("[%s] BasicBlock histogram:", MappedICount.class.getSimpleName()));
         basicBlockHistogram.forEach((k, v) -> System.out.println(String.format("[%s]     %s: %s", MappedICount.class.getSimpleName(), k, v)));
-        System.out.println(String.format("[%s] BasicBlock to Method mapping:", MappedICount.class.getSimpleName()));
-        basicBlockToMethod.forEach((k, v) -> System.out.println(String.format("[%s]     %s: %s", MappedICount.class.getSimpleName(), k, v)));
         System.out.println(String.format("[%s] Total number of executed basic blocks: %s", MappedICount.class.getSimpleName(), nblocks));
         System.out.println(String.format("[%s] Total number of executed methods: %s", MappedICount.class.getSimpleName(), nmethods));
         System.out.println(String.format("[%s] Total number of executed instructions: %s", MappedICount.class.getSimpleName(), ninsts));
+        // reset counters
+        methodCallHistogram.clear();
+        basicBlockHistogram.clear();
+        nblocks = 0;
+        nmethods = 0;
+        ninsts = 0;
+        lastMethodCall.clear();
     }
 
     public static String getLastMethodCall() {
@@ -89,11 +89,6 @@ public class MappedICount extends AbstractJavassistTool {
             System.out.println(String.format("[%s] WARNING! BasicBlock %s is being executed without a method call", MappedICount.class.getSimpleName(), newBlockString));
             return;
         }
-        if (basicBlockToMethod.containsKey(newBlockString) && basicBlockToMethod.get(newBlockString) != MappedICount.getLastMethodCall()) {
-            System.out.println(String.format("[%s] WARNING! BasicBlock %s is being executed in different methods: %s and %s", MappedICount.class.getSimpleName(), newBlockString, basicBlockToMethod.get(newBlockString), MappedICount.getLastMethodCall()));
-            return;
-        }
-        basicBlockToMethod.put(newBlockString, MappedICount.getLastMethodCall());
         nblocks++;
         ninsts += length;
     }
@@ -102,7 +97,7 @@ public class MappedICount extends AbstractJavassistTool {
     protected void transform(CtBehavior behavior) throws Exception {
         String classDotMethod = String.format("%s.%s", behavior.getClass().getName(), behavior.getLongName());
         behavior.insertBefore(String.format("%s.calledFunction(\"%s\");", MappedICount.class.getName(), classDotMethod));
-        if (behavior.getName().equals("main")) {
+        if (behavior.getName().equals("handle")) {
             behavior.insertAfter(String.format("%s.printStatistics();", MappedICount.class.getName()));
         }
         behavior.insertAfter(String.format("%s.leavingFunction();", MappedICount.class.getName()));
