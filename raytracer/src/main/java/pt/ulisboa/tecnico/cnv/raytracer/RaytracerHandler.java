@@ -50,7 +50,7 @@ public class RaytracerHandler implements HttpHandler, RequestHandler<Map<String,
         Main.MULTI_THREAD = Boolean.parseBoolean(parameters.getOrDefault("multi", "false"));
 
         InputStream stream = he.getRequestBody();
-        Map<String, Object> body = mapper.readValue(stream, new TypeReference<>() {});
+        Map<String, Object> body = mapper.readValue(stream, new TypeReference<Map<String, Object>>() {});
 
         byte[] input = ((String) body.get("scene")).getBytes();
         byte[] texmap = null;
