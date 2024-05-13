@@ -83,6 +83,15 @@ fi
 # Send the request
 curl -sS -X POST http://$IP:$PORT/raytracer?scols=400\&srows=300\&wcols=400\&wrows=300\&coff=0\&roff=0\&aa=false --data @"$_PAYLOAD_FILE" > $_TMP_DIR/$OUTPUT_FILE
 
+# while response is empty, retry
+ttl=20
+while [ ! -s $_TMP_DIR/$OUTPUT_FILE ] && [ $ttl -gt 0 ]; do
+    curl -sS -X POST http://$IP:$PORT/raytracer?scols=400\&srows=300\&wcols=400\&wrows=300\&coff=0\&roff=0\&aa=false --data @"$_PAYLOAD_FILE" > $_TMP_DIR/$OUTPUT_FILE
+    ttl=$((ttl-1))
+    sleep 1
+done
+
+
 # Remove a formatting string (remove everything before the comma)
 sed -i 's/^[^,]*,//' $_TMP_DIR/$OUTPUT_FILE
 
