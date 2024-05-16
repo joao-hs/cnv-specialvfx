@@ -5,6 +5,7 @@
 #   $1: Tool to be used for instrumentation
 # Optional:
 #   --output: Output path for the instrumented classes. Default is "instrumented"
+#   --deps: Include dependencies of the packages to be instrumented
 
 # Verify if the mandatory arguments are provided
 if [ $# -lt 1 ]; then
@@ -21,12 +22,17 @@ fi
 # Default values
 TOOL="$1"
 OUTPUT_PATH="instrumented/target/classes"
+_DEPS=""
 
 # Parse the command line arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         --output)
             OUTPUT_PATH="$2"
+            shift
+            ;;
+        --deps)
+            _DEPS="true"
             shift
             ;;
         *)
@@ -38,13 +44,15 @@ done
 
 # -------------------------------------
 
-_PACKAGES_TO_INSTRUMENT="boofcv.alg.enhance"                                            # Dependency of imageproc: EnhanceImageOps.equalizeLocal(...)
-_PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.alg.filter.blur"               # Dependency of imageproc: GBlurImageOps.guassian(...)
-_PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.io.image"                      # Dependency of imageproc: ConvertBufferedImage.convertFrom(...)/ConvertBufferedImage.convertTo(...)/UtilImageIO.loadImageNotNull(...)/UtilImageIO.saveImage(...)
-_PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,pt.ulisboa.tecnico.cnv.imageproc"
-# imageproc has more dependencies, but those probably do not contribute to the overall complexity of the program
+_PACKAGES_TO_INSTRUMENT="pt.ulisboa.tecnico.cnv.imageproc"
 _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,pt.ulisboa.tecnico.cnv.raytracer"
-# raytracer has more dependencies, but those probably do not contribute to the overall complexity of the program
+
+# if deps == "true"
+if [ "$_DEPS" == "true" ]; then
+    _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.alg.enhance"                   # Dependency of imageproc: EnhanceImageOps.equalizeLocal(...)
+    _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.alg.filter.blur"               # Dependency of imageproc: GBlurImageOps.guassian(...)
+    _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.io.image"                      # Dependency of imageproc: ConvertBufferedImage.convertFrom(...)/ConvertBufferedImage.convertTo(...)/UtilImageIO.loadImageNotNull(...)/UtilImageIO.saveImage(...)
+fi
 
 _JAVAAGENT="javassist-wrapper/target/javassist-wrapper-1.0.0-SNAPSHOT-jar-with-dependencies.jar"
 
@@ -54,6 +62,7 @@ _WEBSERVER_CLASS="pt.ulisboa.tecnico.cnv.webserver.WebServer"
 # -------------------------------------
 
 # Step 1: Clean and build all maven modules
+rm -rf $OUTPUT_PATH
 mvn clean package
 
 # Step 2: Run

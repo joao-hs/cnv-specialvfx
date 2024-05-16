@@ -5,7 +5,7 @@ import java.util.List;
 import javassist.CtBehavior;
 import javassist.CtClass;
 
-public class MethodExecutionTimer extends CodeDumper {
+public class MethodExecutionTimer extends AbstractJavassistTool {
 
     public MethodExecutionTimer(List<String> packageNameList, String writeDestination) {
         super(packageNameList, writeDestination);

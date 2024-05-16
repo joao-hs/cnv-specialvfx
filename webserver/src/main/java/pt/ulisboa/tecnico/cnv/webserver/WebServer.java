@@ -10,11 +10,13 @@ import pt.ulisboa.tecnico.cnv.raytracer.RaytracerHandler;
 public class WebServer {
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        MSSWriter retriever = MSSWriter.getInstance();
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         server.createContext("/", new RootHandler());
         server.createContext("/raytracer", new RaytracerHandler());
         server.createContext("/blurimage", new BlurImageHandler());
         server.createContext("/enhanceimage", new EnhanceImageHandler());
         server.start();
+        retriever.start();
     }
 }
