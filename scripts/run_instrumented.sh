@@ -6,11 +6,11 @@
 # Optional:
 #   --output: Output path for the instrumented classes. Default is "instrumented/target/classes"
 #   --deps: Include dependencies of the packages to be instrumented
-#   --no-compile: Skip the compilation of the maven modules
+#   --compile: Compiles the maven modules before running the webserver
 
 # Verify if the mandatory arguments are provided
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <tool> [--output <output_path>]"
+    echo "Usage: $0 <tool> [--output <output_path>] [--deps] [--compile]"
     exit 1
 fi
 

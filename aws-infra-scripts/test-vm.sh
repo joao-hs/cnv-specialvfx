@@ -20,7 +20,7 @@ done
 
 # Smoke test.
 echo "Smoke testing..."
-# $DIR/../scripts/smoke_test.sh --ip $INSTANCE_DNS --port 8000
+$DIR/../scripts/smoke_test.sh --ip $INSTANCE_DNS --port 8000
 
 # echo "Smoke testing LB..."
 # TODO: smoke test LB

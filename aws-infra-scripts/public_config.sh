@@ -9,8 +9,6 @@ mkdir -p $STATE
 source $PRIVATE/config.sh
 
 export REMOTE_REPO_ROOT="/home/ec2-user/cnv24-g03"
-export AWS_JAVA_SDK_PATH="/home/ec2-user/aws-java-sdk"
-export AWS_MVN_PATH="/home/ec2-user/apache-maven-3.9.6/bin/mvn"
 
 export INSTANCE_ID_FILE=$STATE/instance.id
 export INSTANCE_DNS_FILE=$STATE/instance.dns

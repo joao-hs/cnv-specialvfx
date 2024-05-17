@@ -65,6 +65,9 @@ public class AutoScaler {
                             }
                         }
                     }
+                    instanceLoad.forEach((instance, load) -> {
+                        System.out.println(String.format("Instance %s: %d", instance.getInstanceId(), load));
+                    });
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
