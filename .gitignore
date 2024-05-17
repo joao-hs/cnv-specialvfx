@@ -5,7 +5,8 @@ javassist-wrapper/target/*
 load-balancer/target/*
 scripts/tmp/*
 scripts/output/*
-aws_config.sh
+aws-infra-scripts/private/*
+aws-infra-scripts/state/*
 .vscode
 logs
 instrumented

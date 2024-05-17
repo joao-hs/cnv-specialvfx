@@ -4,8 +4,9 @@
 # Mandatory:
 #   $1: Tool to be used for instrumentation
 # Optional:
-#   --output: Output path for the instrumented classes. Default is "instrumented"
+#   --output: Output path for the instrumented classes. Default is "instrumented/target/classes"
 #   --deps: Include dependencies of the packages to be instrumented
+#   --no-compile: Skip the compilation of the maven modules
 
 # Verify if the mandatory arguments are provided
 if [ $# -lt 1 ]; then
@@ -23,6 +24,7 @@ fi
 TOOL="$1"
 OUTPUT_PATH="instrumented/target/classes"
 _DEPS=""
+_COMPILE="false"
 
 # Parse the command line arguments
 while [ $# -gt 0 ]; do
@@ -33,10 +35,11 @@ while [ $# -gt 0 ]; do
             ;;
         --deps)
             _DEPS="true"
-            shift
+            ;;
+        --compile)
+            _COMPILE="true"
             ;;
         *)
-            break
             ;;
     esac
     shift
@@ -47,7 +50,6 @@ done
 _PACKAGES_TO_INSTRUMENT="pt.ulisboa.tecnico.cnv.imageproc"
 _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,pt.ulisboa.tecnico.cnv.raytracer"
 
-# if deps == "true"
 if [ "$_DEPS" == "true" ]; then
     _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.alg.enhance"                   # Dependency of imageproc: EnhanceImageOps.equalizeLocal(...)
     _PACKAGES_TO_INSTRUMENT="$_PACKAGES_TO_INSTRUMENT,boofcv.alg.filter.blur"               # Dependency of imageproc: GBlurImageOps.guassian(...)
@@ -62,8 +64,10 @@ _WEBSERVER_CLASS="pt.ulisboa.tecnico.cnv.webserver.WebServer"
 # -------------------------------------
 
 # Step 1: Clean and build all maven modules
-rm -rf $OUTPUT_PATH
-mvn clean package
+if [ "$_COMPILE" == "true" ]; then
+    rm -rf $OUTPUT_PATH
+    mvn clean package
+fi
 
 # Step 2: Run
 java -cp $_WEBSERVER_JAR -javaagent:$_JAVAAGENT=$TOOL:$_PACKAGES_TO_INSTRUMENT:$OUTPUT_PATH $_WEBSERVER_CLASS
