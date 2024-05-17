@@ -1,7 +1,6 @@
 package pt.ulisboa.tecnico.cnv.webserver;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 import java.net.URI;

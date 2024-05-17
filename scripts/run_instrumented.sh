@@ -64,8 +64,8 @@ _WEBSERVER_CLASS="pt.ulisboa.tecnico.cnv.webserver.WebServer"
 # -------------------------------------
 
 # Step 1: Clean and build all maven modules
+rm -rf $OUTPUT_PATH # always clean instrumented classes
 if [ "$_COMPILE" == "true" ]; then
-    rm -rf $OUTPUT_PATH
     mvn clean package
 fi
 

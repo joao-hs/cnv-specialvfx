@@ -8,6 +8,11 @@
   <artifactId>javassist-wrapper</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <name>javassist-wrapper</name>
+  <parent>
+    <groupId>pt.ulisboa.tecnico.cnv</groupId>
+    <artifactId>cnv</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

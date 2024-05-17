@@ -4,6 +4,11 @@
   <artifactId>raytracer</artifactId>
   <version>1.0.0-SNAPSHOT</version>
   <name>raytracer</name>
+  <parent>
+    <groupId>pt.ulisboa.tecnico.cnv</groupId>
+    <artifactId>cnv</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
 
   <properties>
     <maven.compiler.source>11</maven.compiler.source>
@@ -20,6 +25,12 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
       <version>2.17.0</version>
+    </dependency>
+    <dependency>
+      <groupId>pt.ulisboa.tecnico.cnv</groupId>
+      <artifactId>javassist-wrapper</artifactId>
+      <version>1.0.0-SNAPSHOT</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
     

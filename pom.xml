@@ -13,10 +13,10 @@
 		sorts the projects into the correct build order;
 		builds the selected projects in order. -->
   <modules>
+    <module>javassist-wrapper</module>
     <module>raytracer</module>
     <module>imageproc</module>
     <module>webserver</module>
-    <module>javassist-wrapper</module>
     <module>load-balancer</module>
   </modules>
   

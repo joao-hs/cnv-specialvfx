@@ -38,14 +38,30 @@ public class SpecialVFXTool extends AbstractJavassistTool {
 
     private static final Map<Long, String> requestIdToFeatures = new ConcurrentHashMap<>();
 
+    // TODO: This is a temporary solution for the checkpoint submission. Remove after.
+    private static final AtomicLong localRequestId = new AtomicLong(-1L);
+
     public SpecialVFXTool(List<String> packageNameList, String writeDestination) {
         super(packageNameList, writeDestination);
     }
 
     public static void registerRequest(HttpExchange t) {
-        Long requestId = Long.parseLong(t.getRequestHeaders().get("X-Request-Id").get(0));
+        List<String> headersValue = t.getRequestHeaders().get("X-Request-Id");
+        Long requestId;
+        if (headersValue == null) {
+            requestId = localRequestId.incrementAndGet();
+            threadToRequest.put(Thread.currentThread().getId(), requestId);
+            requestIdToFeatures.put(requestId, "");
+            return;
+        }
+        requestId = Long.parseLong(headersValue.get(0));
         threadToRequest.put(Thread.currentThread().getId(), requestId);
-        requestIdToFeatures.put(requestId, t.getRequestHeaders().get("X-Features").get(0));
+        headersValue = t.getRequestHeaders().get("X-Features");
+        if (headersValue == null) {
+            requestIdToFeatures.put(requestId, "");
+            return;
+        }
+        requestIdToFeatures.put(requestId, headersValue.get(0));
     }
 
     public static Long getRequestId() {
@@ -102,7 +118,6 @@ public class SpecialVFXTool extends AbstractJavassistTool {
         behavior.insertAfter(String.format("%s.incBehavior(\"%s\");", SpecialVFXTool.class.getName(), behavior.getLongName()));
 
         if (behavior.getName().equals("handle")) {
-            behavior.insertBefore(String.format("%s.registerRequest(he);", SpecialVFXTool.class.getName()));
             behavior.insertAfter(String.format("%s.logRequest();", SpecialVFXTool.class.getName()));
         }
     }

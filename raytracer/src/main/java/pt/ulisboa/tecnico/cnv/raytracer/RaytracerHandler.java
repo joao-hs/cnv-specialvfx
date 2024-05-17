@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
+import pt.ulisboa.tecnico.cnv.javassist.tools.SpecialVFXTool;
+
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -25,6 +27,7 @@ public class RaytracerHandler implements HttpHandler, RequestHandler<Map<String,
 
     @Override
     public void handle(HttpExchange he) throws IOException {
+        SpecialVFXTool.registerRequest(he);
         // Handling CORS
         he.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
 

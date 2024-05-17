@@ -160,7 +160,7 @@ public class RayTracer {
             }
         }
 
-        Log.info("Finished in: " + (System.currentTimeMillis()-start) + "ms");
+        Log.debug("Finished in: " + (System.currentTimeMillis()-start) + "ms");
 
         return image;
     }
