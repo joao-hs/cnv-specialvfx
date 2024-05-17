@@ -38,18 +38,18 @@ public abstract class ImageProcessingHandler implements HttpHandler, RequestHand
     }
 
     @Override
-    public void handle(HttpExchange t) throws IOException {
+    public void handle(HttpExchange he) throws IOException {
         // Handling CORS
-        t.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
+        he.getResponseHeaders().add("Access-Control-Allow-Origin", "*");
 
-        if (t.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
-            t.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, OPTIONS");
-            t.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type,Authorization");
-            t.sendResponseHeaders(204, -1);
+        if (he.getRequestMethod().equalsIgnoreCase("OPTIONS")) {
+            he.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            he.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type,Authorization");
+            he.sendResponseHeaders(204, -1);
             return;
         }
 
-        InputStream stream = t.getRequestBody();
+        InputStream stream = he.getRequestBody();
         // Result syntax: data:image/<format>;base64,<encoded image>
         String result = new BufferedReader(new InputStreamReader(stream)).lines().collect(Collectors.joining("\n"));
         String[] resultSplits = result.split(",");
@@ -58,8 +58,8 @@ public abstract class ImageProcessingHandler implements HttpHandler, RequestHand
         String output = handleRequest(resultSplits[1], format);
         output = String.format("data:image/%s;base64,%s", format, output);
 
-        t.sendResponseHeaders(200, output.length());
-        OutputStream os = t.getResponseBody();
+        he.sendResponseHeaders(200, output.length());
+        OutputStream os = he.getResponseBody();
         os.write(output.getBytes());
         os.close();
     }

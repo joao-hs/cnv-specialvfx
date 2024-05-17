@@ -6,17 +6,16 @@ import java.util.Map;
 
 import com.amazonaws.services.ec2.model.Instance;
 
+public class RandomWorkerSelector implements WorkerSelectorStrategy {
 
-public class RoundRobinSelector implements WorkerSelectorStrategy {
+    private static RandomWorkerSelector instance = null;
 
-    private static RoundRobinSelector instance = null;
-
-    private RoundRobinSelector() {
+    private RandomWorkerSelector() {
     }
 
-    public static RoundRobinSelector getInstance() {
+    public static RandomWorkerSelector getInstance() {
         if (instance == null) {
-            instance = new RoundRobinSelector();
+            instance = new RandomWorkerSelector();
         }
         return instance;
     }
@@ -26,4 +25,5 @@ public class RoundRobinSelector implements WorkerSelectorStrategy {
         // TODO Auto-generated method stub
         throw new UnsupportedOperationException("Unimplemented method 'selectWorker'");
     }
+
 }

@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.cnv.javassist.tools;
 
+import com.sun.net.httpserver.HttpExchange;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,20 +34,18 @@ public class SpecialVFXTool extends AbstractJavassistTool {
     private static final ConcurrentLinkedQueue<String> log = new ConcurrentLinkedQueue<>();
     private static final Object logLock = new Object();
 
-    /*
-     * Request counter. Used to generate unique request IDs.
-     */
-    private static final AtomicLong requestCount = new AtomicLong(-1);
-
     private static final Map<Long, Long> threadToRequest = new ConcurrentHashMap<>();
+
+    private static final Map<Long, String> requestIdToFeatures = new ConcurrentHashMap<>();
 
     public SpecialVFXTool(List<String> packageNameList, String writeDestination) {
         super(packageNameList, writeDestination);
     }
 
-    public static void registerRequest() {
-        long requestId = requestCount.incrementAndGet();
+    public static void registerRequest(HttpExchange t) {
+        Long requestId = Long.parseLong(t.getRequestHeaders().get("X-Request-Id").get(0));
         threadToRequest.put(Thread.currentThread().getId(), requestId);
+        requestIdToFeatures.put(requestId, t.getRequestHeaders().get("X-Features").get(0));
     }
 
     public static Long getRequestId() {
@@ -72,12 +72,13 @@ public class SpecialVFXTool extends AbstractJavassistTool {
 
     public static void logRequest() {
         long requestId = getRequestId();
-        String entry = String.format("%d,%d,%d,%d", requestId, nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
+        String entry = String.format("%d,%s,%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
         log.add(entry);
         // reset counters
         nblocks.remove(requestId);
         nmethods.remove(requestId);
         ninsts.remove(requestId);
+        requestIdToFeatures.remove(requestId);
     }
 
     /*
@@ -101,7 +102,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
         behavior.insertAfter(String.format("%s.incBehavior(\"%s\");", SpecialVFXTool.class.getName(), behavior.getLongName()));
 
         if (behavior.getName().equals("handle")) {
-            behavior.insertBefore(String.format("%s.registerRequest();", SpecialVFXTool.class.getName()));
+            behavior.insertBefore(String.format("%s.registerRequest(he);", SpecialVFXTool.class.getName()));
             behavior.insertAfter(String.format("%s.logRequest();", SpecialVFXTool.class.getName()));
         }
     }
