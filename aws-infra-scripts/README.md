@@ -10,7 +10,12 @@ This directory has a set of scripts that can be used to automatically setup AWS 
 
 3. There should already be created an AWS account, a key pair, and a security group. Check [here](https://gitlab.rnl.tecnico.ulisboa.pt/cnv/cnv24/-/blob/master/labs/lab-aws/res/cnv-aws-guide-23-24.pdf)
 
-4. A `config.sh` file should be created in the directory `aws-infra-scripts/private`:
+4. Set the permissions to your key file to 400, for example:
+```bash
+chmod 400 <path-to-repo>/aws-infra-scripts/private/cnv-instance.pem
+```
+
+5. A `config.sh` file should be created in the directory `aws-infra-scripts/private`:
 ```bash
 #!/bin/bash
 export AWS_DEFAULT_REGION="eu-west-3" # Paris

@@ -1,0 +1,5 @@
+#!/bin/bash -e
+
+export PATH=$PATH:/home/ec2-user/apache-maven-3.9.6/bin/ # maven path
+cd /home/ec2-user/cnv24-g03/ # project path
+./scripts/run_lb.sh > logs/$(date +%Y%m%d%H%M%S)-lb.log 2> logs/$(date +%Y%m%d%H%M%S)-lb.err # run the load balancer

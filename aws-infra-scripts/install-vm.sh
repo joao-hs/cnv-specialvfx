@@ -6,14 +6,24 @@ source $_DIR/public_config.sh
 INSTANCE_DNS=$(cat $INSTANCE_DNS_FILE)
 LB_DNS=$(cat $LB_DNS_FILE)
 
+# Setup rc.local
+scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $RC_LOCAL_WORKER_FILE ec2-user@$INSTANCE_DNS:rc.local
+scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $RC_LOCAL_LB_FILE ec2-user@$LB_DNS:rc.local
+scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $RC_LOCAL_SERVICE_FILE ec2-user@$INSTANCE_DNS:rc-local.service
+scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $RC_LOCAL_SERVICE_FILE ec2-user@$LB_DNS:rc-local.service
+cmd="sudo chmod +x rc.local; sudo chmod +x rc-local.service; sudo mv rc.local /etc/rc.local; sudo mv rc-local.service /etc/systemd/system/rc-local.service; sudo systemctl enable rc-local.service"
+ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
+ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
+
 # Install java.
 cmd="sudo yum update -y; sudo yum install java-11-amazon-corretto.x86_64 -y;"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Install maven.
-set_mvn_path="export PATH=\$PATH:/home/ec2-user/apache-maven-3.9.6/bin/"
-cmd="curl \"https://dlcdn.apache.org/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.zip\" -o \"apache-maven-3.9.6-bin.zip\"; unzip apache-maven-3.9.6-bin.zip; rm apache-maven-3.9.6-bin.zip; echo \"$set_mvn_path\" | sudo tee -a /etc/rc.local; $set_mvn_path"
+mvn_path="/home/ec2-user/apache-maven-3.9.6/bin"
+set_mvn_path="export PATH=\$PATH:$mvn_path"
+cmd="curl \"https://dlcdn.apache.org/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.zip\" -o \"apache-maven-3.9.6-bin.zip\"; unzip apache-maven-3.9.6-bin.zip; rm apache-maven-3.9.6-bin.zip;"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
@@ -35,15 +45,15 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cm
 # ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Build the code.
-cmd="export MAVEN_OPTS='-Xmx512m'; mvn clean package -f $REMOTE_REPO_ROOT/pom.xml; mkdir $REMOTE_REPO_ROOT/logs; chmod +x $REMOTE_REPO_ROOT/scripts/*.sh"
+cmd="$mvn_path/mvn clean package -f $REMOTE_REPO_ROOT/pom.xml; mkdir $REMOTE_REPO_ROOT/logs; chmod +x $REMOTE_REPO_ROOT/scripts/*.sh"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Setup rc.local files.
 worker_script="cd $REMOTE_REPO_ROOT; ./scripts/run_instrumented.sh SpecialVFXTool > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.err"
-cmd="echo \"$worker_script\" | sudo tee -a /etc/rc.local; sudo chmod +x /etc/rc.local; sudo chmod +x /etc/rc.d/rc.local"
+cmd="sudo systemctl daemon-reload; sudo systemctl start rc-local.service"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 
 lb_script="cd $REMOTE_REPO_ROOT; ./scripts/run_lb.sh > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-lb.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-lb.err"
-cmd="echo \"$lb_script\" | sudo tee -a /etc/rc.local; sudo chmod +x /etc/rc.local; sudo chmod +x /etc/rc.d/rc.local"
+cmd="sudo systemctl daemon-reload; sudo systemctl start rc-local.service"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
