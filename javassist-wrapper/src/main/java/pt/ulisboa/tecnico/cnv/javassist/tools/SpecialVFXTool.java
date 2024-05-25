@@ -88,7 +88,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
 
     public static void logRequest() {
         long requestId = getRequestId();
-        String entry = String.format("%d,%s,%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
+        String entry = String.format("%d|%s|%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
         log.add(entry);
         // reset counters
         nblocks.remove(requestId);

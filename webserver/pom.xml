@@ -28,6 +28,11 @@
           <version>1.0.0-SNAPSHOT</version>
           <scope>compile</scope>
       </dependency>
+      <dependency>
+          <groupId>com.amazonaws</groupId>
+          <artifactId>aws-java-sdk-dynamodb</artifactId>
+          <version>1.12.723</version>
+      </dependency>
   </dependencies>
 
   <build>

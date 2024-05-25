@@ -1,46 +1,58 @@
 package pt.ulisboa.tecnico.cnv.webserver;
 
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
+import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
+import com.amazonaws.services.dynamodbv2.model.KeyType;
+import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
+import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
+import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
+import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import pt.ulisboa.tecnico.cnv.javassist.tools.SpecialVFXTool;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Stream;
+
 public class MSSWriter {
-    public static class MSSEntry {
-        // key
-        public long requestId;
-        // features: will be used to predict the cost
+    private static final String AWS_REGION = "eu-west-3";
+    private static final String TABLE_NAME = "request-data";
 
+    private final AmazonDynamoDB dynamoDB;
 
-        // instrumentation: will be used to calculate the cost
-        public long nmethods;
-        public long nblocks;
-        public long ninsts;
-
-        public MSSEntry(long requestId, long nmethods, long nblocks, long ninsts) {
-            this.requestId = requestId;
-            this.nmethods = nmethods;
-            this.nblocks = nblocks;
-            this.ninsts = ninsts;
-        }
-
-        public String toString() {
-            return String.format("%d,%d,%d,%d", this.requestId, this.nmethods, this.nblocks, this.ninsts);
-        }
-
-        public String toJson() {
-            return String.format("{\"requestId\": %d, \"nmethods\": %d, \"nblocks\": %d, \"ninsts\": %d}", this.requestId, this.nmethods, this.nblocks, this.ninsts);
-        }
-    }
-
-    public static class RequestFeatures {
-        
-    }
-    private static MSSWriter instance = new MSSWriter();
+    private static MSSWriter instance = null;
 
     private int retrievingInterval = 15000;
 
     private MSSWriter() {
+        dynamoDB = AmazonDynamoDBClientBuilder.standard()
+                .withCredentials(new EnvironmentVariableCredentialsProvider())
+                .withRegion(AWS_REGION)
+                .build();
+
+        CreateTableRequest createTableRequest = new CreateTableRequest()
+                .withTableName(TABLE_NAME)
+                .withKeySchema(new KeySchemaElement().withAttributeName("id").withKeyType(KeyType.HASH))
+                .withAttributeDefinitions(new AttributeDefinition().withAttributeName("id").withAttributeType(ScalarAttributeType.N))
+                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(25L).withWriteCapacityUnits(25L));
+
+        TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
+
+        try {
+            TableUtils.waitUntilActive(dynamoDB, TABLE_NAME);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public static MSSWriter getInstance() {
+        if (instance == null) {
+            instance = new MSSWriter();
+        }
         return instance;
     }
 
@@ -63,12 +75,19 @@ public class MSSWriter {
         }).start();
     }
 
-    private void handleLogEntries(String[] logEntries) {
-        // TODO: Implement this method
-        // for now, just print
+    private synchronized void handleLogEntries(String[] logEntries) {
+        // Could be BatchWriteRequest, but it provides all or nothing semantics, which won't be useful
+        Stream.of(logEntries)
+                .map(entry -> new PutItemRequest(TABLE_NAME, newItemFromLogEntry(entry)))
+                .forEach(dynamoDB::putItem);
+    }
 
-        for (String entry : logEntries) {
-            System.out.println(entry);
-        }
+    private Map<String, AttributeValue> newItemFromLogEntry(String logEntry) {
+        Map<String, AttributeValue> item = new HashMap<>();
+        String[] splitEntry = logEntry.split("\\|");
+        item.put("id", new AttributeValue().withN(splitEntry[0]));
+        item.put("features", new AttributeValue(splitEntry[1]));
+        item.put("instrumentation", new AttributeValue(splitEntry[2]));
+        return item;
     }
 }
