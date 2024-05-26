@@ -69,7 +69,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
         return threadToRequest.get(Thread.currentThread().getId());
     }
 
-    public static void incBasicBlock(int position, int length) {
+    public static void incBasicBlock(int length) {
         Long requestId = getRequestId();
         if (requestId == null) {
             return;
@@ -78,7 +78,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
         ninsts.merge(requestId, (long) length, Long::sum);
     }
 
-    public static void incBehavior(String name) {
+    public static void incBehavior() {
         Long requestId = getRequestId();
         if (requestId == null) {
             return;
@@ -87,13 +87,17 @@ public class SpecialVFXTool extends AbstractJavassistTool {
     }
 
     public static void logRequest() {
-        long requestId = getRequestId();
-        String entry = String.format("%d|%s|%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
-        log.add(entry);
-        // reset counters
+        Long requestId = getRequestId();
+        if (requestId == null) {
+            return;
+        }
+        String entry;
+        entry = String.format("%d|%s|%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
         nblocks.remove(requestId);
         nmethods.remove(requestId);
         ninsts.remove(requestId);
+        log.add(entry);
+
         requestIdToFeatures.remove(requestId);
     }
 
@@ -115,8 +119,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
     @Override
     protected void transform(CtBehavior behavior) throws Exception {
         super.transform(behavior);
-        behavior.insertAfter(String.format("%s.incBehavior(\"%s\");", SpecialVFXTool.class.getName(), behavior.getLongName()));
-
+        behavior.insertAfter(String.format("%s.incBehavior();", SpecialVFXTool.class.getName()));
         if (behavior.getName().equals("handle")) {
             behavior.insertAfter(String.format("%s.logRequest();", SpecialVFXTool.class.getName()));
         }
@@ -125,7 +128,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
     @Override
     protected void transform(BasicBlock block) throws CannotCompileException {
         super.transform(block);
-        block.behavior.insertAt(block.line, String.format("%s.incBasicBlock(%s, %s);", SpecialVFXTool.class.getName(), block.getPosition(), block.getLength()));
+        block.behavior.insertAt(block.line, String.format("%s.incBasicBlock(%s);", SpecialVFXTool.class.getName(), block.getLength()));
     }
 
 }
