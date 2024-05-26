@@ -11,8 +11,8 @@ import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.FeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.ImageProcessingFeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.RaytracerFeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.handlers.LoadBalancingHandler;
-import pt.ulisboa.tecnico.cnv.loadbalancer.strategy.RandomWorkerSelector;
-import pt.ulisboa.tecnico.cnv.loadbalancer.strategy.WorkerSelectorStrategy;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
 
 /*
  * LoadBalancer class is responsible for:
@@ -23,7 +23,7 @@ public class LoadBalancer {
     public static final AtomicLong requestId = new AtomicLong(-1);
 
     public static void main(String[] args) throws Exception {
-        WorkerSelectorStrategy workerSelector = RandomWorkerSelector.getInstance();
+        Supervisor supervisor = SupervisorImpl.getInstance();
         FeatureExtractor imageProcessingFeatureExtractor = ImageProcessingFeatureExtractor.getInstance();        
         FeatureExtractor raytracerFeatureExtractor = RaytracerFeatureExtractor.getInstance();
 
@@ -31,10 +31,10 @@ public class LoadBalancer {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
-        server.createContext("/", new LoadBalancingHandler(workerSelector, null));
-        server.createContext("/raytracer", new LoadBalancingHandler(workerSelector, raytracerFeatureExtractor));
-        server.createContext("/blurimage", new LoadBalancingHandler(workerSelector, imageProcessingFeatureExtractor));
-        server.createContext("/enhanceimage", new LoadBalancingHandler(workerSelector, imageProcessingFeatureExtractor));
+        server.createContext("/", new LoadBalancingHandler(null));
+        server.createContext("/raytracer", new LoadBalancingHandler(raytracerFeatureExtractor));
+        server.createContext("/blurimage", new LoadBalancingHandler(imageProcessingFeatureExtractor));
+        server.createContext("/enhanceimage", new LoadBalancingHandler(imageProcessingFeatureExtractor));
         server.start();
     }
 }

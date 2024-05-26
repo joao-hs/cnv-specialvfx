@@ -30,17 +30,17 @@ public class AutoScaler {
     private AmazonCloudWatch cloudWatchClient;
 
     private AutoScaler() {
+        this.instanceLoad = new ConcurrentHashMap<>();
+        this.ec2Client = AmazonEC2ClientBuilder.standard().withRegion(AWS_REGION).withCredentials(new EnvironmentVariableCredentialsProvider()).build();
+        this.cloudWatchClient = AmazonCloudWatchClientBuilder.standard().withRegion(AWS_REGION).withCredentials(new EnvironmentVariableCredentialsProvider()).build();
+        this.instanceDimension = new Dimension();
+        this.instanceDimension.setName("InstanceId");
     }
 
 
     public static AutoScaler getInstance() {
         if (instance == null) {
             instance = new AutoScaler();
-            instance.instanceLoad = new ConcurrentHashMap<>();
-            instance.ec2Client = AmazonEC2ClientBuilder.standard().withRegion(AWS_REGION).withCredentials(new EnvironmentVariableCredentialsProvider()).build();
-            instance.cloudWatchClient = AmazonCloudWatchClientBuilder.standard().withRegion(AWS_REGION).withCredentials(new EnvironmentVariableCredentialsProvider()).build();
-            instance.instanceDimension = new Dimension();
-            instance.instanceDimension.setName("InstanceId");
         }
         return instance;
     }
