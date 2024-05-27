@@ -19,7 +19,8 @@ public class ICountImageProc extends AbstractJavassistTool {
     }
 
     public static void printNInsts() {
-        System.out.println(String.format("%d,%d", localRequestId.incrementAndGet(), ninsts));
+        long cost = Math.round(ninsts / 1e6);
+        System.out.println(String.format("%d,%d", localRequestId.incrementAndGet(), cost));
         ninsts = 0;
     }
 

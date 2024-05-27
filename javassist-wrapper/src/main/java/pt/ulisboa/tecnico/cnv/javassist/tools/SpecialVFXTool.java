@@ -14,16 +14,6 @@ import javassist.CtBehavior;
 public class SpecialVFXTool extends AbstractJavassistTool {
 
     /**
-     * RequestID -> Number of executed basic blocks.
-     */
-    private static final Map<Long, Long> nblocks = new ConcurrentHashMap<>();
-
-    /**
-     * RequestID -> Number of executed methods.
-     */
-    private static final Map<Long, Long> nmethods = new ConcurrentHashMap<>();
-
-    /**
      * RequestID -> Number of executed instructions.
      */
     private static final Map<Long, Long> ninsts = new ConcurrentHashMap<>();
@@ -61,7 +51,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             requestIdToFeatures.put(requestId, "");
             return;
         }
-        requestIdToFeatures.put(requestId, headersValue.get(0));
+        requestIdToFeatures.put(requestId, String.join(",", headersValue));
     }
 
     public static Long getRequestId() {
@@ -74,16 +64,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
         if (requestId == null) {
             return;
         }
-        nblocks.merge(requestId, 1L, Long::sum);
         ninsts.merge(requestId, (long) length, Long::sum);
-    }
-
-    public static void incBehavior() {
-        Long requestId = getRequestId();
-        if (requestId == null) {
-            return;
-        }
-        nmethods.merge(requestId, 1L, Long::sum);
     }
 
     public static void logRequest() {
@@ -92,9 +73,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             return;
         }
         String entry;
-        entry = String.format("%d|%s|%d,%d,%d", requestId, requestIdToFeatures.get(requestId), nmethods.get(requestId), nblocks.get(requestId), ninsts.get(requestId));
-        nblocks.remove(requestId);
-        nmethods.remove(requestId);
+        entry = String.format("%d|%s|%d", requestId, requestIdToFeatures.get(requestId), Math.round(ninsts.get(requestId) / 1e6));
         ninsts.remove(requestId);
         log.add(entry);
 
@@ -119,7 +98,6 @@ public class SpecialVFXTool extends AbstractJavassistTool {
     @Override
     protected void transform(CtBehavior behavior) throws Exception {
         super.transform(behavior);
-        behavior.insertAfter(String.format("%s.incBehavior();", SpecialVFXTool.class.getName()));
         if (behavior.getName().equals("handle")) {
             behavior.insertAfter(String.format("%s.logRequest();", SpecialVFXTool.class.getName()));
         }
