@@ -19,17 +19,27 @@ import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
  *  - Reverse proxying incoming requests to the selected server
  */
 public class LoadBalancer {
+    public static boolean LOCALHOST = false;
+    public static int LB_PORT = 8000;
 
     public static final AtomicLong requestId = new AtomicLong(-1);
 
     public static void main(String[] args) throws Exception {
-        Supervisor supervisor = SupervisorImpl.getInstance();
+        if (args.length == 1) {
+            if ("--local".equals(args[0])) {
+                LoadBalancer.LOCALHOST = true;
+                LoadBalancer.LB_PORT = 8080; // worker(s) will be running on port 8080
+                return;
+            }
+        }
+
+        // Supervisor supervisor = SupervisorImpl.getInstance();
         FeatureExtractor imageProcessingFeatureExtractor = ImageProcessingFeatureExtractor.getInstance();        
         FeatureExtractor raytracerFeatureExtractor = RaytracerFeatureExtractor.getInstance();
 
-        AutoScaler.getInstance().run();
+        // AutoScaler.getInstance().run();
 
-        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(LoadBalancer.LB_PORT), 0);
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
         server.createContext("/", new LoadBalancingHandler(null));
         server.createContext("/raytracer", new LoadBalancingHandler(raytracerFeatureExtractor));

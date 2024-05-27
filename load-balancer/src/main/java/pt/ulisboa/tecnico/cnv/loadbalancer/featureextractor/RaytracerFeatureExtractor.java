@@ -1,6 +1,8 @@
 package pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Scanner;
@@ -27,13 +29,15 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         return instance;
     }
     
-    private void extractFeaturesFromBody(String requestBody, ArrayList<Integer> features) {
+    private void extractFeaturesFromBody(InputStream bodyStream, ArrayList<Integer> features) {
         // Refer to raytracer's README for the expected format of the scene description
         Map<String, Object> body = null;
         try {
-            body = mapper.readValue(requestBody, new TypeReference<Map<String, Object>>() {});
+            body = mapper.readValue(bodyStream, new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException e) {
             e.printStackTrace();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
         byte[] input = ((String) body.get("scene")).getBytes();
         Scanner scanner = new Scanner(new ByteArrayInputStream(input));
@@ -47,6 +51,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         // lights
         int lights = scanner.nextInt();
         features.add(lights);
+        scanner.nextLine();
         for (int i = 0; i < lights; i++) {
             scanner.nextLine(); // light description
         }
@@ -54,6 +59,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         // pigments
         int pigments = scanner.nextInt();
         features.add(pigments);
+        scanner.nextLine();
         for (int i = 0; i < pigments; i++) {
             scanner.nextLine(); // pigment description
         }
@@ -61,6 +67,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         // finishes
         int finishes = scanner.nextInt();
         features.add(finishes);
+        scanner.nextLine();
         for (int i = 0; i < finishes; i++) {
             scanner.nextLine(); // finish description
         }
@@ -68,6 +75,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         // shapes
         int shapes = scanner.nextInt();
         features.add(shapes);
+        scanner.nextLine();
         for (int i = 0; i < shapes; i++) {
             scanner.nextLine(); // shape description
         }
@@ -84,12 +92,12 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
 
 
     @Override
-    public ArrayList<Integer> extractFeatures(String requestBody, Map<String, String> params) {
+    public ArrayList<Integer> extractFeatures(InputStream bodyStream, Map<String, String> params) {
         // Refer to raytracer's README for the expected format of the scene description
         ArrayList<Integer> features = new ArrayList<>();
 
         // Body features
-        extractFeaturesFromBody(requestBody, features);
+        extractFeaturesFromBody(bodyStream, features);
 
         // Params features
         features.add(Integer.parseInt(params.get("scols")) * Integer.parseInt(params.get("srows")));

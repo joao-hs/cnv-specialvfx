@@ -1,13 +1,19 @@
 package pt.ulisboa.tecnico.cnv.loadbalancer.handlers;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -16,13 +22,11 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
-import jdk.jshell.spi.ExecutionControl;
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
 import pt.ulisboa.tecnico.cnv.loadbalancer.autoscaler.AutoScaler;
 import pt.ulisboa.tecnico.cnv.loadbalancer.costcalculator.CostCalculator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.FeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
-import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
 
 public class LoadBalancingHandler implements HttpHandler {
     private static final int WORKER_PORT = 8000;
@@ -32,6 +36,7 @@ public class LoadBalancingHandler implements HttpHandler {
     private CostCalculator costCalculator;
 
     private final FeatureExtractor featureExtractor;
+
     private final AutoScaler autoScaler = AutoScaler.getInstance();
 
     public LoadBalancingHandler(FeatureExtractor featureExtractor) {
@@ -42,50 +47,35 @@ public class LoadBalancingHandler implements HttpHandler {
      * Copy the request and send it to the selected server, then 
      * gather the response and send it back to the client
      */
-    private void forwardRequest(URL selectedWorker, HttpExchange originalExchange, ArrayList<Integer> extractedFeatures) throws IOException {
-        try {
-            // Create http connection to the selected server
-            HttpURLConnection workerConnection = (HttpURLConnection) selectedWorker.openConnection();
-            workerConnection.setRequestMethod(originalExchange.getRequestMethod());
+    private void forwardRequest(URL destination, String method, InputStream bodyStream, HttpExchange exchange, ArrayList<Integer> extractedFeatures) throws IOException, URISyntaxException, InterruptedException {
+        HttpClient client = HttpClient.newHttpClient();
 
-            // Copy headers from the original request to the server request
-            originalExchange.getRequestHeaders().forEach((key, value) -> {
-                workerConnection.setRequestProperty(key, value.get(0));
-            });
+        // Create base request
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+                .uri(destination.toURI());
 
-            // Add custom headers
-            String features = extractedFeatures != null ? extractedFeatures.stream().map(Object::toString).collect(Collectors.joining(",")) : null;
-            workerConnection.setRequestProperty("X-Request-Id", Long.toString(LoadBalancer.requestId.incrementAndGet()));
-            if (features != null) {
-                workerConnection.setRequestProperty("X-Features", features);
+        if ("POST".equals(method)) {
+            // Copy request body
+            String body = new BufferedReader(new InputStreamReader(bodyStream)).lines().collect(Collectors.joining("\n"));
+            requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body));
+
+            // Append custom headers: Request ID and retrieved features
+            requestBuilder.header("X-Request-Id", Long.toString(LoadBalancer.requestId.incrementAndGet()));
+            if (extractedFeatures != null) {
+                extractedFeatures.stream().map(i -> Integer.toString(i)).forEach(v -> requestBuilder.header("X-Features", v));
             }
-
-            // Set the body of the request
-            if ("POST".equals(originalExchange.getRequestMethod())) {
-                workerConnection.setDoOutput(true);
-                workerConnection.getOutputStream().write(originalExchange.getRequestBody().readAllBytes());
-            }
-
-            // Get the response from the server
-            int responseCode = workerConnection.getResponseCode();
-            Map<String, List<String>> responseHeaders = workerConnection.getHeaderFields();
-            InputStream responseBody = workerConnection.getInputStream();
-            
-            // Forward the response to the client
-            originalExchange.getResponseHeaders().putAll(responseHeaders);
-            originalExchange.sendResponseHeaders(responseCode, workerConnection.getContentLength());
-
-            originalExchange.getResponseBody().write(responseBody.readAllBytes());
-
-            // Close the connection
-            workerConnection.disconnect();
-        
-        } catch (IOException e) {
-            e.printStackTrace();
-            originalExchange.sendResponseHeaders(500, 0);
-        } finally {
-            originalExchange.close();
         }
+
+        HttpRequest request = requestBuilder.build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        System.out.println(String.format("Forward Request to [%s] and got response code [%d]", destination.getHost(), response.statusCode()));
+
+        exchange.sendResponseHeaders(response.statusCode(), response.body().length());
+        OutputStream os = exchange.getResponseBody();
+        os.write(response.body().getBytes());
+        os.close();
 
     }
 
@@ -99,8 +89,14 @@ public class LoadBalancingHandler implements HttpHandler {
     }
 
     private URL createURLFromOriginal(URI originalURI, String newAddress) throws MalformedURLException {
-        return new URL(originalURI.toURL().getProtocol(), newAddress, WORKER_PORT,
-                    String.format("/%s?%s", originalURI.getRawPath(), originalURI.getRawQuery()));
+        String file;
+        String query = originalURI.getRawQuery();
+        if (query == null) {
+            file = originalURI.getRawPath();
+        } else {
+            file = String.format("%s?%s", originalURI.getRawPath(), query);
+        }
+        return new URL("http", newAddress, WORKER_PORT, file);
     }
 
 
@@ -108,20 +104,47 @@ public class LoadBalancingHandler implements HttpHandler {
     public void handle(HttpExchange exchange) throws IOException {
         if (featureExtractor == null) {
             Instance picked = supervisor.getBestFitForCost(0);
-            forwardRequest(createURLFromOriginal(exchange.getRequestURI(), picked.getPublicIpAddress()), exchange, null);
+            try {
+                forwardRequest(
+                        createURLFromOriginal(exchange.getRequestURI(), picked.getPublicIpAddress()),
+                        exchange.getRequestMethod(),
+                        exchange.getRequestBody(),
+                        exchange,
+                        null
+                );
+            } catch (URISyntaxException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
             return;
         }
-        Map<Instance, Integer> loadMap = autoScaler.getLoad();
+        // Map<Instance, Integer> loadMap = autoScaler.getLoad();
         Map<String, String> params = queryToMap(exchange.getRequestURI().getRawQuery());
-        ArrayList<Integer> features = featureExtractor.extractFeatures(exchange.getRequestBody().readAllBytes().toString(), params);
-        int cost = costCalculator.estimateCost(features);
-        Instance picked = supervisor.getBestFitForCost(cost);
-        if (picked == null) {
-            // trigger lambda function
-            System.out.println("NOT IMPLEMENTED: Lambda function triggering");
+        byte[] requestBody = exchange.getRequestBody().readAllBytes();
+
+        ArrayList<Integer> features = featureExtractor.extractFeatures(new ByteArrayInputStream(requestBody), params);
+
+        String address = null;
+        // TODO:
+        // int cost = costCalculator.estimateCost(features);
+
+        if (LoadBalancer.LOCALHOST) {
+            address = "localhost";
         } else {
-            // workers
-            forwardRequest(createURLFromOriginal(exchange.getRequestURI(), picked.getPublicIpAddress()), exchange, features);
+            // TODO: 
+            // Instance picked = supervisor.getBestFitForCost(0);
+            // address = picked.getPublicIpAddress();
+        }
+
+        try {
+            forwardRequest(
+                    createURLFromOriginal(exchange.getRequestURI(), address),
+                    exchange.getRequestMethod(),
+                    new ByteArrayInputStream(requestBody),
+                    exchange,
+                    features
+            );
+        } catch (URISyntaxException | InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 }
