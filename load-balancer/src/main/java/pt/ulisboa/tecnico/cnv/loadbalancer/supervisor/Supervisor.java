@@ -13,7 +13,7 @@ public interface Supervisor {
      * @param instance instance that is going to handle the request
      * @param requestId request unique ID
      */
-    public void registerRequestForInstance(Instance instance, int requestId);
+    public void registerRequestForInstance(Instance instance, long requestId, int cost);
 
     /**
      * @param cost cost/complexity score of the request that is going to be handled

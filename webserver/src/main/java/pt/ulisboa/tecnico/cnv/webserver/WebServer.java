@@ -16,6 +16,7 @@ public class WebServer {
         server.createContext("/raytracer", new RaytracerHandler());
         server.createContext("/blurimage", new BlurImageHandler());
         server.createContext("/enhanceimage", new EnhanceImageHandler());
+        server.createContext("/health", new HealthCheckHandler());
         server.start();
         retriever.start();
     }
