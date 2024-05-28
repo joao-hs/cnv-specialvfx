@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.cnv.webserver;
 
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
@@ -19,8 +20,8 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 public class MSSWriter {
-    private static final String AWS_REGION = "eu-west-3";
-    private static final String TABLE_NAME = "request-data";
+    private static final Regions AWS_REGION = Regions.EU_WEST_3;
+    private static final String TABLE_NAME = "raytracer-scored-requests";
 
     private final AmazonDynamoDB dynamoDB;
 
@@ -38,7 +39,7 @@ public class MSSWriter {
                 .withTableName(TABLE_NAME)
                 .withKeySchema(new KeySchemaElement().withAttributeName("id").withKeyType(KeyType.HASH))
                 .withAttributeDefinitions(new AttributeDefinition().withAttributeName("id").withAttributeType(ScalarAttributeType.N))
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(25L).withWriteCapacityUnits(25L));
+                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(5L).withWriteCapacityUnits(5L));
 
         TableUtils.createTableIfNotExists(dynamoDB, createTableRequest);
 
@@ -78,8 +79,9 @@ public class MSSWriter {
     private synchronized void handleLogEntries(String[] logEntries) {
         // Could be BatchWriteRequest, but it provides all or nothing semantics, which won't be useful
         Stream.of(logEntries)
-                .map(entry -> new PutItemRequest(TABLE_NAME, newItemFromLogEntry(entry)))
-                .forEach(dynamoDB::putItem);
+                // .map(entry -> new PutItemRequest(TABLE_NAME, newItemFromLogEntry(entry)))
+                // .forEach(dynamoDB::putItem);
+                .forEach(System.out::println);
     }
 
     private Map<String, AttributeValue> newItemFromLogEntry(String logEntry) {
@@ -87,7 +89,7 @@ public class MSSWriter {
         String[] splitEntry = logEntry.split("\\|");
         item.put("id", new AttributeValue().withN(splitEntry[0]));
         item.put("features", new AttributeValue(splitEntry[1]));
-        item.put("instrumentation", new AttributeValue(splitEntry[2]));
+        item.put("cost", new AttributeValue().withN(splitEntry[2]));
         return item;
     }
 }

@@ -24,7 +24,7 @@ import com.sun.net.httpserver.HttpHandler;
 
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
 import pt.ulisboa.tecnico.cnv.loadbalancer.autoscaler.AutoScaler;
-import pt.ulisboa.tecnico.cnv.loadbalancer.costcalculator.CostCalculator;
+import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.CostEstimator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.FeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
 
@@ -33,7 +33,7 @@ public class LoadBalancingHandler implements HttpHandler {
 
     private Supervisor supervisor;
 
-    private CostCalculator costCalculator;
+    private CostEstimator costEstimator;
 
     private final FeatureExtractor featureExtractor;
 

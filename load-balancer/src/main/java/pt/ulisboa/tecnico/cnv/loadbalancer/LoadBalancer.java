@@ -29,7 +29,6 @@ public class LoadBalancer {
             if ("--local".equals(args[0])) {
                 LoadBalancer.LOCALHOST = true;
                 LoadBalancer.LB_PORT = 8080; // worker(s) will be running on port 8080
-                return;
             }
         }
 

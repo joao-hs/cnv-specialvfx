@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.cnv.loadbalancer.supervisor;
 import com.amazonaws.services.ec2.model.Instance;
 
 import java.util.PriorityQueue;
-import java.util.Queue;
 
 /**
  * Implementations of this interface should be responsible for mapping all active instances to current load. Also

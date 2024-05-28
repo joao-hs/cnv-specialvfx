@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
@@ -17,7 +18,7 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
 public class AutoScaler {
-    private final static String AWS_REGION = "eu-west-3";
+    private final static Regions AWS_REGION = Regions.EU_WEST_3;
     private final static long AUTOSCALING_PERIOD = 10000;
     private final static long INSTANCE_RECOGNITION_PERIOD = 10000;
     private final static long INSTANCE_METRICS_PERIOD = 10000;
