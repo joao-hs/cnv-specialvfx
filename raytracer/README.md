@@ -76,7 +76,9 @@ Pigment =
     gradient <origin: Point> <vector: Vector> <start: Color> <end: Color>
     texmap <_: String> <bmpTexmap: byte[]> <sa: Double> <sb: Double> <sc: Double> <sd: Double> <ta: Double> <tb: Double> <tc: Double> <td: Double>
 
-SurfaceFinish = <pigNum: Integer> <finishNum: Integer> <_: shapeProperties>
+SurfaceFinish = <ambient: Float> <diffuse: Float> <specular: Float> <shininess: Float> <reflection: Float> <refraction: Float> <transparency: Float> <indiceofrefraction: Float>
+
+Shape = <pigNum: Integer> <surfaceFinishNum: Integer> <_: ShapeProperties>
 
 Polygon = <point1: Point> <point2: Point> <point3: Point> <point4: Point>
 

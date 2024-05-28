@@ -11,3 +11,4 @@ aws-infra-scripts/state/*
 logs
 instrumented
 .idea
+resources

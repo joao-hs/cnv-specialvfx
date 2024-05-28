@@ -5,7 +5,7 @@
 #   --compile: Compiles the maven modules before running the webserver
 
 # Verify if the mandatory arguments are provided
-if [ $# -lt 1 ]; then
+if [ $# -gt 1 ]; then
     echo "Usage: $0 [--compile]"
     exit 1
 fi
@@ -38,4 +38,4 @@ if [ "$_COMPILE" == "true" ]; then
 fi
 
 # Step 2: Run
-java -cp $_LB_JAR $_LB_CLASS
+java -cp $_LB_JAR $_LB_CLASS --local

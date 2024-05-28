@@ -44,6 +44,12 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cm
 # ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 # ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
+# Clean unnecessary modules
+instance_cmd="rm -rf $REMOTE_REPO_ROOT/load-balancer; sed -i '/load-balancer/d' $REMOTE_REPO_ROOT/pom.xml"
+ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@INSTANCE_DNS $instance_cmd
+lb_cmd="rm -rf $REMOTE_REPO_ROOT/imageproc $REMOTE_REPO_ROOT/javassist-wrapper $REMOTE_REPO_ROOT/raytracer $REMOTE_REPO_ROOT/webserver; sed -i '/imageproc\|javassist-wrapper\|raytracer\|webserver/d' $REMOTE_REPO_ROOT/pom.xml"
+ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $lb_cmd
+
 # Build the code.
 cmd="$mvn_path/mvn clean package -f $REMOTE_REPO_ROOT/pom.xml; mkdir $REMOTE_REPO_ROOT/logs; chmod +x $REMOTE_REPO_ROOT/scripts/*.sh"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
