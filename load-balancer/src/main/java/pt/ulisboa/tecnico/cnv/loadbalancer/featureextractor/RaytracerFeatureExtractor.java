@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 
 public class RaytracerFeatureExtractor implements FeatureExtractor {
-    public static final int NUM_FEATURES = 9;
+    public static final int NUM_FEATURES = 3;
     
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -33,7 +33,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         // Refer to raytracer's README for the expected format of the scene description
         Map<String, Object> body = null;
         try {
-            body = mapper.readValue(bodyStream, new TypeReference<Map<String, Object>>() {});
+            body = mapper.readValue(bodyStream, new TypeReference<>() {});
         } catch (JsonProcessingException e) {
             e.printStackTrace();
         } catch (IOException e) {
@@ -50,7 +50,6 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
 
         // lights
         int lights = scanner.nextInt();
-        features.add(lights);
         scanner.nextLine();
         for (int i = 0; i < lights; i++) {
             scanner.nextLine(); // light description
@@ -58,15 +57,17 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
 
         // pigments
         int pigments = scanner.nextInt();
-        features.add(pigments);
         scanner.nextLine();
         for (int i = 0; i < pigments; i++) {
-            scanner.nextLine(); // pigment description
+            String line = scanner.nextLine(); // pigment description
+            if (line.startsWith("texmap")) {
+                scanner.nextLine();
+                scanner.nextLine();
+            }
         }
 
         // finishes
         int finishes = scanner.nextInt();
-        features.add(finishes);
         scanner.nextLine();
         for (int i = 0; i < finishes; i++) {
             scanner.nextLine(); // finish description
@@ -74,13 +75,14 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
 
         // shapes
         int shapes = scanner.nextInt();
-        features.add(shapes);
         scanner.nextLine();
         for (int i = 0; i < shapes; i++) {
             scanner.nextLine(); // shape description
         }
 
         scanner.close();
+
+        features.add((lights + pigments + finishes) * shapes);
     
         // texmap
         if (body.containsKey("texmap")) {
@@ -100,14 +102,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         extractFeaturesFromBody(bodyStream, features);
 
         // Params features
-        features.add((int) Math.round(Integer.parseInt(params.get("scols")) * Integer.parseInt(params.get("srows")) / 1e3));
-        features.add((int) Math.round(Integer.parseInt(params.get("wcols")) * Integer.parseInt(params.get("wrows")) / 1e3));
         if (Boolean.parseBoolean(params.get("aa"))) {
-            features.add(1);
-        } else {
-            features.add(0);
-        }
-        if (Boolean.parseBoolean(params.get("multi"))) {
             features.add(1);
         } else {
             features.add(0);
