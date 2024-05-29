@@ -17,6 +17,10 @@ import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
 
+import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
+
 public class AutoScaler {
     private final static Regions AWS_REGION = Regions.EU_WEST_3;
     private final static long AUTOSCALING_PERIOD = 10000;
@@ -46,7 +50,23 @@ public class AutoScaler {
         return instance;
     }
 
-    public synchronized void run() {
+    public void run() {
+        if (LoadBalancer.LOCALHOST) {
+            runLocal();
+        } else {
+            runAws();
+        }
+    }
+
+    public synchronized void runLocal() {
+        Instance instance = new Instance();
+        instance.setPublicIpAddress("localhost");
+        this.instanceLoad.put(instance, 0);
+        Supervisor supervisor = SupervisorImpl.getInstance();
+        supervisor.registerActiveInstance(instance);
+    }
+
+    public synchronized void runAws() {
         // Fetch all instances
         for (Reservation reservation : ec2Client.describeInstances().getReservations()) {
             for (Instance instance : reservation.getInstances()) {
