@@ -26,7 +26,7 @@ import org.apache.commons.lang3.tuple.Pair;
 
 public class SupervisorImpl implements Supervisor {
     private static SupervisorImpl instance = null;
-    private final int HEALTH_INTERVAL = 10000;
+    private final int HEALTH_INTERVAL = 5000;
     private final int SECONDS_TO_WAIT_FOR_STARTUP = 180;
     private final int WORKER_PORT = LoadBalancer.WORKER_PORT;
     private final int MAX_COST = 10000;
@@ -131,6 +131,7 @@ public class SupervisorImpl implements Supervisor {
         }
     }
 
+    @Override
     public boolean registerActiveInstance(Instance inst) {
         System.out.println("Registering New Instance: " + inst.getPublicIpAddress());
         for (int i = 0; i < SECONDS_TO_WAIT_FOR_STARTUP; i++) {
@@ -201,6 +202,7 @@ public class SupervisorImpl implements Supervisor {
         this.instAvailableCosts.put(instance, Pair.of(currentCost + cost, this.instAvailableCosts.get(instance).getRight()));
     }
 
+    @Override
     public void removeRequestForInstance(Instance instance, long requestId) {
         if (this.instRemoving.containsKey(instance)) {
             Map<Pair<Long, Integer>, Object> requests = this.instRemoving.get(instance);
@@ -248,13 +250,13 @@ public class SupervisorImpl implements Supervisor {
 
         for (Instance inst : sortedInstances) {
             if (this.instAvailableCosts.get(inst).getLeft() + cost <= MAX_COST*IDEAL_CPU &&
-                this.instAvailableCosts.get(inst).getRight() <= IDEAL_CPU){
+                this.instAvailableCosts.get(inst).getRight() < 1.0){
                 return inst;
             }
         }
         for (Instance inst : sortedInstances) {
             if (this.instAvailableCosts.get(inst).getLeft() + cost < MAX_COST &&
-                this.instAvailableCosts.get(inst).getRight() < 1){
+                this.instAvailableCosts.get(inst).getRight() < 1.0){
                 return inst;
             }
         }
@@ -279,6 +281,7 @@ public class SupervisorImpl implements Supervisor {
         return null;
     }
 
+    @Override
     public void removeInactiveInstance(Instance inst){
         if (this.instAvailableCosts.containsKey(inst) && this.instRequests.containsKey(inst)) {
             Map<Pair<Long, Integer>, Object> requests = this.instRequests.get(inst);
@@ -293,7 +296,8 @@ public class SupervisorImpl implements Supervisor {
         }
     }
 
-    public void removeInstance(Instance inst) {
+    @Override
+    public void toRemoveInstance(Instance inst) {
         this.instAvailableCosts.remove(inst);
         if (this.instRequests.containsKey(inst)){
             Map<Pair<Long, Integer>, Object> requests = this.instRequests.get(inst);
@@ -312,4 +316,71 @@ public class SupervisorImpl implements Supervisor {
         }
         return queue;
     }
+
+    @Override
+    public PriorityQueue<Instance> getFreeToRemoveInstances() {
+        PriorityQueue<Instance> queue = new PriorityQueue<>();
+        for (Instance inst : this.instRemoving.keySet()) {
+            if (this.instRemoving.get(inst).isEmpty()) {
+                queue.add(inst);
+            }
+        }
+        return queue;
+    }
+
+    @Override
+    public PriorityQueue<Instance> getAllAvailableInstances() {
+        PriorityQueue<Instance> queue = new PriorityQueue<>();
+        for (Instance inst : this.instAvailableCosts.keySet()) {
+            queue.add(inst);
+        }
+        return queue;
+    }
+
+    @Override
+    public PriorityQueue<Instance> getAllToRemoveInstances() {
+        PriorityQueue<Instance> queue = new PriorityQueue<>();
+        for (Instance inst : this.instRemoving.keySet()) {
+            queue.add(inst);
+        }
+        return queue;
+    }
+
+    @Override
+    public Set<Pair<Instance, Double>> getCpuUsageInstances() {
+        Set<Pair<Instance, Double>> cpuInst = new HashSet<>();
+        for (Instance inst : this.instAvailableCosts.keySet()) {
+            cpuInst.add(Pair.of(inst, this.instAvailableCosts.get(inst).getRight()));
+        }
+        return cpuInst;
+    }
+
+    @Override
+    public Set<Instance> areAllAvailableInstFull() {
+        Set<Instance> instances = new HashSet<>();
+        for (Instance inst : this.instAvailableCosts.keySet()) {
+            if (this.instAvailableCosts.get(inst).getLeft() < IDEAL_CPU*MAX_COST ||
+                this.instAvailableCosts.get(inst).getRight() < IDEAL_CPU ) {
+                return null;
+            }
+            instances.add(inst);
+        }
+        if (!this.instRemoving.isEmpty()) {
+            return null;
+        }
+        return instances;
+    }
+
+    @Override
+    public Set<Instance> possibleUnusedInst() {
+        Set<Instance> instances = new HashSet<>();
+        for (Instance inst : this.instAvailableCosts.keySet()) {
+            if (this.instAvailableCosts.get(inst).getLeft() < MAX_COST*(1 - IDEAL_CPU) || 
+                this.instAvailableCosts.get(inst).getRight() < (1 - IDEAL_CPU)) {
+                instances.add(inst);
+            }
+        }
+        return instances;
+    }
+
 }

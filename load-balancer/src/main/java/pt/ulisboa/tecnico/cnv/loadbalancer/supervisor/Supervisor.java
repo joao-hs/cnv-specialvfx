@@ -3,6 +3,9 @@ package pt.ulisboa.tecnico.cnv.loadbalancer.supervisor;
 import com.amazonaws.services.ec2.model.Instance;
 
 import java.util.PriorityQueue;
+import java.util.Set;
+
+import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Implementations of this interface should be responsible for mapping all active instances to current load. Also
@@ -14,6 +17,8 @@ public interface Supervisor {
      * @param requestId request unique ID
      */
     public void registerRequestForInstance(Instance instance, long requestId, int cost);
+
+    public void removeRequestForInstance(Instance instance, long requestId);
 
     /**
      * @param cost cost/complexity score of the request that is going to be handled
@@ -34,4 +39,20 @@ public interface Supervisor {
     public void start();
 
     public boolean registerActiveInstance(Instance inst);
+
+    public void removeInactiveInstance(Instance inst);
+
+    public void toRemoveInstance(Instance inst);
+
+    public PriorityQueue<Instance> getFreeToRemoveInstances();
+
+    public PriorityQueue<Instance> getAllAvailableInstances();
+
+    public PriorityQueue<Instance> getAllToRemoveInstances();
+
+    public Set<Pair<Instance, Double>> getCpuUsageInstances();
+
+    public Set<Instance> areAllAvailableInstFull();
+
+    public Set<Instance> possibleUnusedInst();
 }
