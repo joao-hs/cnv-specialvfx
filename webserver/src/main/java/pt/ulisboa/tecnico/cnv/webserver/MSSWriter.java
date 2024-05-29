@@ -15,13 +15,16 @@ import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
 import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import pt.ulisboa.tecnico.cnv.javassist.tools.SpecialVFXTool;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
 public class MSSWriter {
     private static final Regions AWS_REGION = Regions.EU_WEST_3;
-    private static final String TABLE_NAME = "raytracer-scored-requests";
+    private static final String TABLE_NAME = "mss";
 
     private final AmazonDynamoDB dynamoDB;
 
@@ -78,18 +81,36 @@ public class MSSWriter {
 
     private synchronized void handleLogEntries(String[] logEntries) {
         // Could be BatchWriteRequest, but it provides all or nothing semantics, which won't be useful
-        Stream.of(logEntries)
-                // .map(entry -> new PutItemRequest(TABLE_NAME, newItemFromLogEntry(entry)))
-                // .forEach(dynamoDB::putItem);
-                .forEach(System.out::println);
+        Stream<String> stream = Stream.of(logEntries);
+        if (WebServer.LOCALHOST) {
+            File localDb = new File("/tmp/SpecialVFX-local-mss.db");
+            try {
+                localDb.createNewFile();
+                FileWriter writer = new FileWriter(localDb, true);
+                stream.forEach(entry -> {
+                    try {
+                        System.out.println(entry);
+                        writer.write(entry + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                writer.close();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            stream.map(entry -> new PutItemRequest(TABLE_NAME, newItemFromLogEntry(entry))).forEach(dynamoDB::putItem);
+        }
     }
 
     private Map<String, AttributeValue> newItemFromLogEntry(String logEntry) {
         Map<String, AttributeValue> item = new HashMap<>();
         String[] splitEntry = logEntry.split("\\|");
         item.put("id", new AttributeValue().withN(splitEntry[0]));
-        item.put("features", new AttributeValue(splitEntry[1]));
-        item.put("cost", new AttributeValue().withN(splitEntry[2]));
+        item.put("type", new AttributeValue().withN(splitEntry[1]));
+        item.put("features", new AttributeValue(splitEntry[2]));
+        item.put("cost", new AttributeValue().withN(splitEntry[3]));
         return item;
     }
 }

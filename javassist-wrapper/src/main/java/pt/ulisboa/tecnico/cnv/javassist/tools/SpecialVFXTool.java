@@ -28,6 +28,8 @@ public class SpecialVFXTool extends AbstractJavassistTool {
 
     private static final Map<Long, String> requestIdToFeatures = new ConcurrentHashMap<>();
 
+    private static final Map<Long, Integer> requestIdToType = new ConcurrentHashMap<>();
+
     // TODO: This is a temporary solution for the checkpoint submission. Remove after.
     private static final AtomicLong localRequestId = new AtomicLong(-1L);
 
@@ -52,6 +54,14 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             return;
         }
         requestIdToFeatures.put(requestId, String.join(",", headersValue));
+        if (t.getRequestURI().getPath().startsWith("/blurimage")) {
+            requestIdToType.put(requestId, 0);
+        } else if (t.getRequestURI().getPath().startsWith("/enhanceimage")) {
+            requestIdToType.put(requestId, 1);
+        } else if (t.getRequestURI().getPath().startsWith("/raytracer")) {
+            requestIdToType.put(requestId, 2);
+        }
+
     }
 
     public static Long getRequestId() {
@@ -73,11 +83,12 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             return;
         }
         String entry;
-        entry = String.format("%d|%s|%d", requestId, requestIdToFeatures.get(requestId), Math.round(ninsts.get(requestId) / 1e6));
+        entry = String.format("%d|%d|%s|%d", requestId, requestIdToType.get(requestId), requestIdToFeatures.get(requestId), Math.round(ninsts.get(requestId) / 1e6));
         ninsts.remove(requestId);
         log.add(entry);
 
         requestIdToFeatures.remove(requestId);
+        threadToRequest.remove(Thread.currentThread().getId());
     }
 
     /*

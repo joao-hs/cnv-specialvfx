@@ -18,29 +18,37 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.lambda.AWSLambda;
+import com.amazonaws.services.lambda.AWSLambdaClient;
+import com.amazonaws.services.lambda.model.InvokeRequest;
+import com.amazonaws.services.lambda.model.InvokeResult;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
-import pt.ulisboa.tecnico.cnv.loadbalancer.autoscaler.AutoScaler;
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.CostEstimator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.FeatureExtractor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
 
 public class LoadBalancingHandler implements HttpHandler {
-    private static final int WORKER_PORT = 8000;
+    private static final int WORKER_PORT = LoadBalancer.WORKER_PORT;
 
-    private Supervisor supervisor;
+    private static final AWSLambda lambda = AWSLambdaClient.builder()
+            .withRegion(Regions.EU_WEST_3)
+            .withCredentials(new EnvironmentVariableCredentialsProvider())
+            .build();
 
-    private CostEstimator costEstimator;
-
+    private final Supervisor supervisor = SupervisorImpl.getInstance();
+    private final CostEstimator costEstimator;
     private final FeatureExtractor featureExtractor;
 
-    private final AutoScaler autoScaler = AutoScaler.getInstance();
-
-    public LoadBalancingHandler(FeatureExtractor featureExtractor) {
+    public LoadBalancingHandler(FeatureExtractor featureExtractor, CostEstimator costEstimator) {
         this.featureExtractor = featureExtractor;
+        this.costEstimator = costEstimator;
     }
 
     /*
@@ -99,6 +107,38 @@ public class LoadBalancingHandler implements HttpHandler {
         return new URL("http", newAddress, WORKER_PORT, file);
     }
 
+    private void forwardWithLambda(InputStream bodyStream, HttpExchange exchange) {
+        String functionName = null;
+        if (exchange.getRequestURI().getPath().startsWith("/blurimage") || exchange.getRequestURI().getPath().startsWith("/enhanceimage")) {
+            functionName = "imageproc-lambda";
+        } else if (exchange.getRequestURI().getPath().startsWith("/raytracer")) {
+            functionName = "raytracer-lambda";
+        } else {
+            return;
+        }
+
+        String json = new BufferedReader(new InputStreamReader(bodyStream)).lines().collect(Collectors.joining("\n"));
+        InvokeRequest request = new InvokeRequest()
+                .withFunctionName(functionName)
+                .withPayload(json);
+                
+        InvokeResult response = lambda.invoke(request);
+        if (response.getStatusCode() != 200) {
+            throw new RuntimeException("Lambda invocation failed");
+        }
+
+        String responseBody = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(response.getPayload().array()))).lines().collect(Collectors.joining("\n"));
+        
+        try {
+            exchange.sendResponseHeaders(200, responseBody.length());
+            OutputStream os = exchange.getResponseBody();
+            os.write(responseBody.getBytes());
+            os.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -117,22 +157,32 @@ public class LoadBalancingHandler implements HttpHandler {
             }
             return;
         }
-        // Map<Instance, Integer> loadMap = autoScaler.getLoad();
         Map<String, String> params = queryToMap(exchange.getRequestURI().getRawQuery());
         byte[] requestBody = exchange.getRequestBody().readAllBytes();
 
         ArrayList<Integer> features = featureExtractor.extractFeatures(new ByteArrayInputStream(requestBody), params);
 
+        Instance picked = null;
         String address = null;
-        // TODO:
-        // int cost = costCalculator.estimateCost(features);
+        int cost = costEstimator.estimateCost(features);
+        System.out.println("Estimated cost: " + cost);
 
         if (LoadBalancer.LOCALHOST) {
             address = "localhost";
         } else {
-            // TODO: 
-            // Instance picked = supervisor.getBestFitForCost(0);
-            // address = picked.getPublicIpAddress();
+            picked = supervisor.getBestFitForCost(cost);
+            System.out.println("Picked instance: " + (picked == null ? "lambda" : picked.getInstanceId()));
+            if (picked != null) {
+                address = picked.getPublicIpAddress();
+            }
+        }
+        if (picked == null && address == null) {
+            // trigger Lambda when supervisor can't find any instance suitable for the request
+            if (LoadBalancer.LOCALHOST) {
+                throw new RuntimeException("No instance available to handle request");
+            }
+            forwardWithLambda(new ByteArrayInputStream(requestBody), exchange);
+            return;
         }
 
         try {

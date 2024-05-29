@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.cnv.imageproc;
 
 import boofcv.alg.enhance.EnhanceImageOps;
+import boofcv.concurrency.BoofConcurrency;
 import boofcv.io.image.ConvertBufferedImage;
 import boofcv.io.image.UtilImageIO;
 import boofcv.struct.image.GrayU8;
@@ -9,6 +10,7 @@ import java.awt.image.BufferedImage;
 public class EnhanceImageHandler extends ImageProcessingHandler {
 
     public BufferedImage process(BufferedImage bi) {
+        BoofConcurrency.USE_CONCURRENT = false;
         GrayU8 gray = ConvertBufferedImage.convertFrom(bi, (GrayU8)null);
         GrayU8 adjusted = gray.createSameShape();
         EnhanceImageOps.equalizeLocal(gray, 50, adjusted, 256, null);

@@ -8,7 +8,14 @@ import pt.ulisboa.tecnico.cnv.imageproc.EnhanceImageHandler;
 import pt.ulisboa.tecnico.cnv.raytracer.RaytracerHandler;
 
 public class WebServer {
+    public static boolean LOCALHOST = false;
+
     public static void main(String[] args) throws Exception {
+        if (args.length == 1) {
+            if ("--local".equals(args[0])) {
+                WebServer.LOCALHOST = true;
+            }
+        }
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         MSSWriter retriever = MSSWriter.getInstance();
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());

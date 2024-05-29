@@ -34,7 +34,7 @@ public class ImageProcessingFeatureExtractor implements FeatureExtractor {
         try {
             ByteArrayInputStream bais = new ByteArrayInputStream(decoded);
             BufferedImage bi = ImageIO.read(bais);
-            features.add(bi.getWidth()*bi.getHeight());
+            features.add((int) Math.round(bi.getWidth()*bi.getHeight() / 1e3));
         } catch (IOException e) {
             e.printStackTrace();
         }

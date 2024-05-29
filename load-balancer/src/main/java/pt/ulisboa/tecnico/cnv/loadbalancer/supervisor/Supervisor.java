@@ -27,4 +27,11 @@ public interface Supervisor {
      * request-free period
      */
     public PriorityQueue<Instance> getFreeInstances();
+
+    /*
+     * Start the supervisor
+     */
+    public void start();
+
+    public boolean registerActiveInstance(Instance inst);
 }

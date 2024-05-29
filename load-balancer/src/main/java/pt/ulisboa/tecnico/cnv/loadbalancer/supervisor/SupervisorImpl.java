@@ -2,36 +2,42 @@ package pt.ulisboa.tecnico.cnv.loadbalancer.supervisor;
 
 import com.amazonaws.services.ec2.model.Instance;
 
+import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.Comparator;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.commons.lang3.tuple.Pair;
 
 public class SupervisorImpl implements Supervisor {
-
     private static SupervisorImpl instance = null;
-    private Map<Instance, Set<Pair<Long, Integer>>> instRequests= new HashMap<Instance, Set<Pair<Long, Integer>>>();
-    private Map<Instance, Set<Pair<Long, Integer>>> instRemoving= new LinkedHashMap<Instance, Set<Pair<Long, Integer>>>();
-    private Map<Instance, Pair<Integer, Double>> instAvailableCosts= new LinkedHashMap<Instance, Pair<Integer, Double>>();
-    private LinkedList<Pair<Long, Integer>> requestQueue = new LinkedList<Pair<Long, Integer>>();
     private final int HEALTH_INTERVAL = 10000;
-    private final int MAX_COST = 16;
+    private final int SECONDS_TO_WAIT_FOR_STARTUP = 180;
+    private final int WORKER_PORT = LoadBalancer.WORKER_PORT;
+    private final int MAX_COST = 10000;
     private final double IDEAL_CPU = 0.75;
-
+    
+    private Map<Instance, Map<Pair<Long, Integer>, Object>> instRequests= new ConcurrentHashMap<>();
+    private Map<Instance, Map<Pair<Long, Integer>, Object>> instRemoving= new ConcurrentHashMap<>();
+    private Map<Instance, Pair<Integer, Double>> instAvailableCosts= new ConcurrentHashMap<>();
+    private CopyOnWriteArrayList<Pair<Long, Integer>> requestQueue = new CopyOnWriteArrayList<>();
+    
     private SupervisorImpl() {
-        start();
     }
 
     public static SupervisorImpl getInstance() {
@@ -41,6 +47,7 @@ public class SupervisorImpl implements Supervisor {
         return instance;
     }
 
+    @Override
     public void start() {
         new Thread(() -> {
             System.out.println("Starting Health checker");
@@ -81,10 +88,10 @@ public class SupervisorImpl implements Supervisor {
         for (Instance inst : this.instAvailableCosts.keySet()) {
             String ipAddress = inst.getPublicIpAddress();
             new Thread(() -> {
-                System.out.println("Checking health of instance: " + inst.toString());
+                System.out.println("Checking health of instance: " + inst.getPublicIpAddress());
                 
                 HttpClient client = HttpClient.newHttpClient();
-                String url = "http://" + ipAddress + "/health";
+                String url = "http://" + ipAddress + ":" + WORKER_PORT + "/health";
                 HttpRequest request = HttpRequest.newBuilder().timeout(Duration.ofSeconds(2))
                     .uri(URI.create(url))
                     .GET()
@@ -94,7 +101,7 @@ public class SupervisorImpl implements Supervisor {
                 try {
                     response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
+                    System.out.println("Instance " + inst.getPublicIpAddress() + " is unreachable. Most likely dead.");
                     removeInactiveInstance(inst);
                     return;
                 }
@@ -103,6 +110,7 @@ public class SupervisorImpl implements Supervisor {
                     //unhandled case: the supervisor assumes that in this case the instance is dead
                     //and removes it from every list. Possible problem: incorrect instances are kept alive
                     // doing nothing instead of being killed.
+                    System.out.println("Instance " + inst.getPublicIpAddress() + " is not responding to health check. Removing it.");
                     removeInactiveInstance(inst);
                 }
                 else {
@@ -116,6 +124,7 @@ public class SupervisorImpl implements Supervisor {
                     Double cpuUsage = Double.parseDouble(splitRes[1]);
                     Pair<Integer, Double> instPair = this.instAvailableCosts.get(inst);
                     this.instAvailableCosts.put(inst, Pair.of(instPair.getLeft(), cpuUsage));
+                    System.out.println("Instance " + inst.getPublicIpAddress() + " is healthy. CPU Usage: " + cpuUsage);
                 }
                 
             }).start();
@@ -123,14 +132,15 @@ public class SupervisorImpl implements Supervisor {
     }
 
     public boolean registerActiveInstance(Instance inst) {
-        for (int i = 0; i < 180; i++) {
+        System.out.println("Registering New Instance: " + inst.getPublicIpAddress());
+        for (int i = 0; i < SECONDS_TO_WAIT_FOR_STARTUP; i++) {
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
             HttpClient client = HttpClient.newHttpClient();
-            String url = "http://" + inst.getPublicIpAddress() + "/health";
+            String url = "http://" + inst.getPublicIpAddress() + ":" + WORKER_PORT + "/health";
             HttpRequest request = HttpRequest.newBuilder().timeout(Duration.ofSeconds(1))
                 .uri(URI.create(url))
                 .GET()
@@ -140,13 +150,14 @@ public class SupervisorImpl implements Supervisor {
             try {
                 response = client.send(request, HttpResponse.BodyHandlers.ofString());
             } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
+                System.out.println("Instance " + inst.getPublicIpAddress() + " is unreachable. Keep trying for " + (SECONDS_TO_WAIT_FOR_STARTUP - i) + " seconds");
                 continue;
             }
 
             if (response.statusCode() / 100 == 2) {
                 this.instAvailableCosts.put(inst, Pair.of(0, 0.0));
-                this.instRequests.put(inst, new HashSet<Pair<Long, Integer>>());
+                this.instRequests.put(inst, new ConcurrentHashMap<>());
+                System.out.println("Register New Instance Succeeded");
                 return true;
             }
         }
@@ -157,10 +168,10 @@ public class SupervisorImpl implements Supervisor {
     @Override
     public void registerRequestForInstance(Instance instance, long requestId, int cost) {
         if (this.instRemoving.containsKey(instance)){
-            Set<Pair<Long, Integer>> requests = this.instRemoving.get(instance);
+            Map<Pair<Long, Integer>, Object> requests = this.instRemoving.get(instance);
             int instcost = 0;
             if (!requests.isEmpty()){
-                for (Pair<Long,Integer> request : requests) {
+                for (Pair<Long,Integer> request : requests.keySet()) {
                     instcost = instcost + request.getRight();
                 }
             } 
@@ -184,35 +195,36 @@ public class SupervisorImpl implements Supervisor {
             return;
         }
         if (!this.instRequests.containsKey(instance)){
-            this.instRequests.put(instance, new HashSet<Pair<Long, Integer>>());
+            this.instRequests.put(instance, new ConcurrentHashMap<>());
         }
-        this.instRequests.get(instance).add(Pair.of(requestId, cost));
+        this.instRequests.get(instance).put(Pair.of(requestId, cost), null);
         this.instAvailableCosts.put(instance, Pair.of(currentCost + cost, this.instAvailableCosts.get(instance).getRight()));
     }
 
     public void removeRequestForInstance(Instance instance, long requestId) {
         if (this.instRemoving.containsKey(instance)) {
-            Set<Pair<Long, Integer>> requests = this.instRemoving.get(instance);
+            Map<Pair<Long, Integer>, Object> requests = this.instRemoving.get(instance);
             Set<Pair<Long, Integer>> tmp = new HashSet<Pair<Long, Integer>>();
-            for (Pair<Long,Integer> pair : requests) {
+            for (Pair<Long,Integer> pair : requests.keySet()) {
                 if (pair.getLeft().equals(requestId)) {
                     tmp.add(pair);
                 }
             }
-            requests.removeAll(tmp);
+            tmp.forEach(requests::remove);
             return;
         }
         if (this.instAvailableCosts.containsKey(instance) && this.instRequests.containsKey(instance)) {
-            Set<Pair<Long, Integer>> requests = this.instRequests.get(instance);
-            Set<Pair<Long, Integer>> tmp = new HashSet<Pair<Long, Integer>>();
+            Map<Pair<Long, Integer>, Object> requests = this.instRequests.get(instance);
+            Pair<Long, Integer> tmp = null;
             int cost = 0;
-            for (Pair<Long,Integer> pair : requests) {
+            for (Pair<Long,Integer> pair : requests.keySet()) {
                 if (pair.getLeft().equals(requestId)) {
-                    tmp.add(pair);
-                    cost = cost + pair.getRight();
+                    tmp = pair;
+                    cost = pair.getRight();
+                    break;
                 }
             }
-            requests.removeAll(tmp);
+            requests.remove(tmp);
             Pair<Integer, Double> infoPair = this.instAvailableCosts.get(instance);
             this.instAvailableCosts.put(instance, Pair.of(infoPair.getLeft() - cost, infoPair.getRight()));
         }
@@ -227,13 +239,20 @@ public class SupervisorImpl implements Supervisor {
         if (this.instAvailableCosts.isEmpty()) {
             return null;
         }
-        for (Instance inst : this.instAvailableCosts.keySet()) {
+
+        Comparator<Instance> instanceHighestToLowestCPUComparator =
+                (o1, o2) -> Double.compare(instAvailableCosts.get(o2).getRight(), instAvailableCosts.get(o1).getRight());
+
+        SortedSet<Instance> sortedInstances = new TreeSet<>(instanceHighestToLowestCPUComparator);
+        sortedInstances.addAll(this.instAvailableCosts.keySet());
+
+        for (Instance inst : sortedInstances) {
             if (this.instAvailableCosts.get(inst).getLeft() + cost <= MAX_COST*IDEAL_CPU &&
                 this.instAvailableCosts.get(inst).getRight() <= IDEAL_CPU){
                 return inst;
             }
         }
-        for (Instance inst : this.instAvailableCosts.keySet()) {
+        for (Instance inst : sortedInstances) {
             if (this.instAvailableCosts.get(inst).getLeft() + cost < MAX_COST &&
                 this.instAvailableCosts.get(inst).getRight() < 1){
                 return inst;
@@ -242,13 +261,13 @@ public class SupervisorImpl implements Supervisor {
         if (!instRemoving.isEmpty()) {
             Instance toReturn = null;
             for (Instance inst : this.instRemoving.keySet()) {
-                Set<Pair<Long, Integer>> requests = this.instRemoving.get(inst);
+                Map<Pair<Long, Integer>, Object> requests = this.instRemoving.get(inst);
                 int instcost = 0;
                 if (requests.isEmpty()){
                     toReturn = inst;
                     continue;
                 } 
-                for (Pair<Long,Integer> request : requests) {
+                for (Pair<Long,Integer> request : requests.keySet()) {
                     instcost = instcost + request.getRight();
                 }
                 if (instcost + cost < MAX_COST) {
@@ -262,28 +281,22 @@ public class SupervisorImpl implements Supervisor {
 
     public void removeInactiveInstance(Instance inst){
         if (this.instAvailableCosts.containsKey(inst) && this.instRequests.containsKey(inst)) {
-            Set<Pair<Long, Integer>> requests = this.instRequests.get(inst);
-            for (Pair<Long, Integer> request : requests) {
-                this.requestQueue.add(request);
-            }
+            Map<Pair<Long, Integer>, Object> requests = this.instRequests.get(inst);
+            this.requestQueue.addAll(requests.keySet());
             this.instAvailableCosts.remove(inst);
             this.instRequests.remove(inst);
         }
         if (this.instRemoving.containsKey(inst)) {
-            Set<Pair<Long, Integer>> requests = this.instRemoving.get(inst);
-            for (Pair<Long, Integer> request : requests) {
-                this.requestQueue.add(request);
-            }
+            Map<Pair<Long, Integer>, Object> requests = this.instRemoving.get(inst);
+            this.requestQueue.addAll(requests.keySet());
             this.instRemoving.remove(inst);
         }
     }
 
     public void removeInstance(Instance inst) {
-        if (this.instAvailableCosts.containsKey(inst)) {
-            this.instAvailableCosts.remove(inst);
-        }
+        this.instAvailableCosts.remove(inst);
         if (this.instRequests.containsKey(inst)){
-            Set<Pair<Long, Integer>> requests = this.instRequests.get(inst);
+            Map<Pair<Long, Integer>, Object> requests = this.instRequests.get(inst);
             this.instRemoving.put(inst, requests);
             this.instRequests.remove(inst);
         }

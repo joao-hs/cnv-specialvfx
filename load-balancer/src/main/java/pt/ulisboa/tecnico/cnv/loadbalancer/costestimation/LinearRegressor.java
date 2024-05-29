@@ -1,20 +1,27 @@
 package pt.ulisboa.tecnico.cnv.loadbalancer.costestimation;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.Expose;
 import org.apache.commons.lang3.tuple.Pair;
 
 import com.google.gson.Gson;
 
 public class LinearRegressor {
     public static class Parameters {
+        @Expose
         public double[] weights;
         public ReadWriteLock weightLocks = new ReentrantReadWriteLock();
+        @Expose
         public double bias;
+        @Expose
         public double learningRate;
+        @Expose
         public double regularizationFactor;
 
         public Parameters(double[] weights, double bias, double learningRate, double regularizationFactor) {
@@ -25,11 +32,13 @@ public class LinearRegressor {
         }
 
         public String export() {
-            return new Gson().toJson(this);
+            return new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create().toJson(this);
         }
 
         public static Parameters fromJson(String json) {
-            return new Gson().fromJson(json, Parameters.class);
+            Parameters obj = new Gson().fromJson(json, Parameters.class);
+            obj.weightLocks = new ReentrantReadWriteLock();
+            return obj;
         }
     }
 
@@ -39,10 +48,8 @@ public class LinearRegressor {
 
     public LinearRegressor(int numFeatures) {
         double[] weights = new double[numFeatures];
-        for (int i = 0; i < numFeatures; i++) {
-            weights[i] = 0;
-        }
-        this.parameters = new Parameters(weights, 0, 0.01, 0.01);
+        Arrays.fill(weights, 0);
+        this.parameters = new Parameters(weights, 0, 1e-7, 0.1);
     }
 
     public int estimateCost(List<Integer> features) {
@@ -65,6 +72,7 @@ public class LinearRegressor {
 
         double errorSum = 0;
         double[] weightGradient = new double[parameters.weights.length];
+        Arrays.fill(weightGradient, 0);
 
         // Compute gradients
         for (Pair<List<Integer>, Integer> row : trainingData) {
@@ -75,16 +83,21 @@ public class LinearRegressor {
 
             errorSum += error;
             for (int i = 0; i < features.size(); i++) {
-                weightGradient[i] += -2 * error * features.get(i) / batchSize + 2 * parameters.regularizationFactor * parameters.weights[i];
+                weightGradient[i] += error * features.get(i);
             }
+        }
+
+        for (int i = 0; i < weightGradient.length; i++) {
+            weightGradient[i] *= 2.0 / batchSize;
+            weightGradient[i] += 2 * this.parameters.regularizationFactor * this.parameters.weights[i];
         }
 
         // Update weights
         try {
             writeLock.lock();
-            this.parameters.bias = this.parameters.bias - this.parameters.learningRate * (-2/batchSize) * errorSum;
+            this.parameters.bias = this.parameters.bias - this.parameters.learningRate * ((double) 2 / batchSize) * errorSum;
             for (int i = 0; i < this.parameters.weights.length; i++) {
-                this.parameters.weights[i] = this.parameters.weights[i] - this.parameters.learningRate * weightGradient[i];
+                this.parameters.weights[i] = this.parameters.weights[i] + this.parameters.learningRate * weightGradient[i];
             }
         } finally {
             writeLock.unlock();
@@ -100,7 +113,7 @@ public class LinearRegressor {
         return error / trainingData.size();
     }
 
-    private static double loss(List<Pair<List<Integer>, Integer>> data, LinearRegressor regressor) {
+    public static double loss(List<Pair<List<Integer>, Integer>> data, LinearRegressor regressor) {
         double weightSquaredSum = 0;
         for (double weight : regressor.parameters.weights) {
             weightSquaredSum += Math.pow(weight, 2);

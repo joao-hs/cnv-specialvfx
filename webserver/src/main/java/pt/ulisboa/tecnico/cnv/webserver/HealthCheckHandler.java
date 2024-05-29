@@ -7,10 +7,12 @@ import java.lang.management.ManagementFactory;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
+import com.sun.management.OperatingSystemMXBean;
+
 public class HealthCheckHandler implements HttpHandler{
     @Override
     public void handle(HttpExchange he) throws IOException {
-        double cpuLoad = ManagementFactory.getPlatformMXBean(com.sun.management.OperatingSystemMXBean.class).getCpuLoad();
+        double cpuLoad = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class).getSystemCpuLoad();
 
         he.sendResponseHeaders(200, 0);
         OutputStream os = he.getResponseBody();

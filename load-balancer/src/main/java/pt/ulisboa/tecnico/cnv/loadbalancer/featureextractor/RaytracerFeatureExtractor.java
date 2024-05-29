@@ -84,7 +84,7 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
     
         // texmap
         if (body.containsKey("texmap")) {
-            features.add(((ArrayList<Integer>) body.get("texmap")).size());
+            features.add(1);
         } else {
             features.add(0);
         }
@@ -100,8 +100,8 @@ public class RaytracerFeatureExtractor implements FeatureExtractor {
         extractFeaturesFromBody(bodyStream, features);
 
         // Params features
-        features.add(Integer.parseInt(params.get("scols")) * Integer.parseInt(params.get("srows")));
-        features.add(Integer.parseInt(params.get("wcols")) * Integer.parseInt(params.get("wrows")));
+        features.add((int) Math.round(Integer.parseInt(params.get("scols")) * Integer.parseInt(params.get("srows")) / 1e3));
+        features.add((int) Math.round(Integer.parseInt(params.get("wcols")) * Integer.parseInt(params.get("wrows")) / 1e3));
         if (Boolean.parseBoolean(params.get("aa"))) {
             features.add(1);
         } else {
