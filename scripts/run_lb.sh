@@ -38,4 +38,4 @@ if [ "$_COMPILE" == "true" ]; then
 fi
 
 # Step 2: Run
-java -cp $_LB_JAR $_LB_CLASS --local
+java -cp $_LB_JAR $_LB_CLASS

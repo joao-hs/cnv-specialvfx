@@ -33,7 +33,7 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cm
 # ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Copy local repository to instance.
-$DIR/zip_repo.sh $STATE/repo.zip
+$DIR/zip_repo.sh repo.zip
 scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $STATE/repo.zip ec2-user@$INSTANCE_DNS:repo.zip
 scp -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH $STATE/repo.zip ec2-user@$LB_DNS:repo.zip
 cmd="unzip repo.zip -d /home/ec2-user; rm repo.zip;"
@@ -46,7 +46,7 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cm
 
 # Clean unnecessary modules
 instance_cmd="rm -rf $REMOTE_REPO_ROOT/load-balancer; sed -i '/load-balancer/d' $REMOTE_REPO_ROOT/pom.xml"
-ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@INSTANCE_DNS $instance_cmd
+ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $instance_cmd
 lb_cmd="rm -rf $REMOTE_REPO_ROOT/imageproc $REMOTE_REPO_ROOT/javassist-wrapper $REMOTE_REPO_ROOT/raytracer $REMOTE_REPO_ROOT/webserver; sed -i '/imageproc\|javassist-wrapper\|raytracer\|webserver/d' $REMOTE_REPO_ROOT/pom.xml"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $lb_cmd
 
@@ -56,7 +56,7 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_D
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Setup rc.local files.
-worker_script="cd $REMOTE_REPO_ROOT; ./scripts/run_instrumented.sh SpecialVFXTool > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.err"
+worker_script="cd $REMOTE_REPO_ROOT; ./scripts/run_instrumented.sh SpecialVFXTool --imageproc > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.err"
 cmd="sudo systemctl daemon-reload; sudo systemctl start rc-local.service"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 

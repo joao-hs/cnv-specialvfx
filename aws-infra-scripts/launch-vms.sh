@@ -5,7 +5,7 @@ source $_DIR/public_config.sh
 
 # Run new instance (worker)
 aws ec2 run-instances \
-	--image-id resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 \
+	--image-id $(cat $IMAGE_ID_FILE) \
 	--instance-type t2.micro \
 	--key-name $AWS_KEYPAIR_NAME \
 	--security-group-ids $AWS_SECURITY_GROUP \
@@ -15,7 +15,7 @@ echo "New instance (worker) with id $INSTANCE_ID."
 
 # Run new instance (load balancer)
 aws ec2 run-instances \
-	--image-id resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 \
+	--image-id $(cat $LB_IMAGE_ID_FILE) \
 	--instance-type t2.micro \
 	--key-name $AWS_KEYPAIR_NAME \
 	--security-group-ids $AWS_SECURITY_GROUP \
