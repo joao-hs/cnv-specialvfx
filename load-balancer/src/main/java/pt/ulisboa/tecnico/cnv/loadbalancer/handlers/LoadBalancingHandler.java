@@ -20,7 +20,6 @@ import java.util.stream.Stream;
 
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.lambda.AWSLambda;
 import com.amazonaws.services.lambda.AWSLambdaClient;
 import com.amazonaws.services.lambda.model.InvokeRequest;
@@ -31,6 +30,7 @@ import com.sun.net.httpserver.HttpHandler;
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.CostEstimator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.FeatureExtractor;
+import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisedWorker;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
 
@@ -55,7 +55,7 @@ public class LoadBalancingHandler implements HttpHandler {
      * Copy the request and send it to the selected server, then 
      * gather the response and send it back to the client
      */
-    private void forwardRequest(URL destination, String method, InputStream bodyStream, HttpExchange exchange, ArrayList<Integer> extractedFeatures) throws IOException, URISyntaxException, InterruptedException {
+    private void forwardRequest(URL destination, long requestId, String method, InputStream bodyStream, HttpExchange exchange, ArrayList<Integer> extractedFeatures) throws IOException, URISyntaxException, InterruptedException {
         HttpClient client = HttpClient.newHttpClient();
 
         // Create base request
@@ -68,7 +68,7 @@ public class LoadBalancingHandler implements HttpHandler {
             requestBuilder.POST(HttpRequest.BodyPublishers.ofString(body));
 
             // Append custom headers: Request ID and retrieved features
-            requestBuilder.header("X-Request-Id", Long.toString(LoadBalancer.requestId.incrementAndGet()));
+            requestBuilder.header("X-Request-Id", Long.toString(requestId));
             if (extractedFeatures != null) {
                 extractedFeatures.stream().map(i -> Integer.toString(i)).forEach(v -> requestBuilder.header("X-Features", v));
             }
@@ -142,11 +142,16 @@ public class LoadBalancingHandler implements HttpHandler {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
+        long requestId = LoadBalancer.requestId.incrementAndGet();
         if (featureExtractor == null) {
-            Instance picked = supervisor.getBestFitForCost(0);
+            SupervisedWorker picked = supervisor.getBestFitForCost(0);
+            if (picked == null) {
+                throw new RuntimeException("No instance available to handle request");
+            }
             try {
                 forwardRequest(
-                        createURLFromOriginal(exchange.getRequestURI(), picked.getPublicIpAddress()),
+                        createURLFromOriginal(exchange.getRequestURI(), picked.getInstance().getPublicIpAddress()),
+                        requestId,
                         exchange.getRequestMethod(),
                         exchange.getRequestBody(),
                         exchange,
@@ -162,7 +167,7 @@ public class LoadBalancingHandler implements HttpHandler {
 
         ArrayList<Integer> features = featureExtractor.extractFeatures(new ByteArrayInputStream(requestBody), params);
 
-        Instance picked = null;
+        SupervisedWorker picked = null;
         String address = null;
         int cost = costEstimator.estimateCost(features);
         System.out.println("Estimated cost: " + cost);
@@ -171,9 +176,10 @@ public class LoadBalancingHandler implements HttpHandler {
             address = "localhost";
         } else {
             picked = supervisor.getBestFitForCost(cost);
-            System.out.println("Picked instance: " + (picked == null ? "lambda" : picked.getInstanceId()));
+            System.out.println("Picked instance: " + (picked == null ? "lambda" : picked.getInstance().getInstanceId()));
             if (picked != null) {
-                address = picked.getPublicIpAddress();
+                address = picked.getInstance().getPublicIpAddress();
+                supervisor.registerRequestForWorker(picked, requestId, cost);
             }
         }
         if (picked == null && address == null) {
@@ -188,13 +194,20 @@ public class LoadBalancingHandler implements HttpHandler {
         try {
             forwardRequest(
                     createURLFromOriginal(exchange.getRequestURI(), address),
+                    requestId,
                     exchange.getRequestMethod(),
                     new ByteArrayInputStream(requestBody),
                     exchange,
                     features
             );
         } catch (URISyntaxException | InterruptedException e) {
-            throw new RuntimeException(e);
+            // if something goes wrong, trigger Lambda
+            if (!LoadBalancer.LOCALHOST) {
+                forwardWithLambda(new ByteArrayInputStream(requestBody), exchange);
+                System.out.println("Error forwarding request to instance, triggered lambda instead");
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 }

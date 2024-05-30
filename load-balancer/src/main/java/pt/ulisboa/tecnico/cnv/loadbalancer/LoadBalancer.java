@@ -39,6 +39,9 @@ public class LoadBalancer {
         Supervisor supervisor = SupervisorImpl.getInstance();
         supervisor.start();
 
+        AutoScaler autoScaler = AutoScaler.getInstance();
+        autoScaler.start();
+    
         FeatureExtractor imageProcessingFeatureExtractor = ImageProcessingFeatureExtractor.getInstance();        
         FeatureExtractor raytracerFeatureExtractor = RaytracerFeatureExtractor.getInstance();
 
@@ -49,8 +52,6 @@ public class LoadBalancer {
         blurJobCostEstimator.onlineTraining();
         enhanceJobCostEstimator.onlineTraining();
         raytracerJobCostEstimator.onlineTraining();
-
-        AutoScaler.getInstance().run();
 
         HttpServer server = HttpServer.create(new InetSocketAddress(LoadBalancer.LB_PORT), 0);
         server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
