@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.cnv.loadbalancer.supervisor;
 import com.amazonaws.services.ec2.model.Instance;
 
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
+import pt.ulisboa.tecnico.cnv.loadbalancer.autoscaler.AutoScaler;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.WorkerPool.WorkerPoolType;
 
 import java.io.IOException;
@@ -18,6 +19,7 @@ public class SupervisorImpl implements Supervisor {
     private static SupervisorImpl instance = null;
     static final int HEALTH_INTERVAL = 5000;
     private static final int SECONDS_TO_WAIT_FOR_STARTUP = 180;
+    private static final int SECOND_TOLERANCE_BEFORE_CONFIRMING_DEATH = 30;
     private static final int WORKER_PORT = LoadBalancer.WORKER_PORT;
     
     private final WorkerPool lowPool = new WorkerPool(WorkerPool.WorkerPoolType.LOW);
@@ -25,12 +27,14 @@ public class SupervisorImpl implements Supervisor {
     private final WorkerPool highPool = new WorkerPool(WorkerPool.WorkerPoolType.HIGH);
     private final WorkerPool fullPool = new WorkerPool(WorkerPool.WorkerPoolType.FULL);
     private final WorkerPool terminatingPool = new WorkerPool(WorkerPool.WorkerPoolType.TERMINATING);
+    private final WorkerPool schrodingerPool = new WorkerPool(WorkerPoolType.SCHRODINGER); // like the cat
     private final Map<WorkerPoolType, WorkerPool> pools = new HashMap<WorkerPoolType, WorkerPool>() {{
         put(WorkerPoolType.LOW, lowPool);
         put(WorkerPoolType.MEDIUM, mediumPool);
         put(WorkerPoolType.HIGH, highPool);
         put(WorkerPoolType.FULL, fullPool);
         put(WorkerPoolType.TERMINATING, terminatingPool);
+        put(WorkerPoolType.SCHRODINGER, schrodingerPool);
     }};
     private final Map<SupervisedWorker, WorkerPool> workers = new HashMap<>();
 
@@ -88,8 +92,8 @@ public class SupervisorImpl implements Supervisor {
                 HttpResponse<String> response = healthCheck(worker.getInstance().getPublicIpAddress(), Duration.ofSeconds(2));
                 
                 if (response == null) {
-                    System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is unreachable. Most likely dead.");
-                    removeInactiveWorker(worker);
+                    System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is unreachable. May be dead or with high latency.");
+                    unresponsiveWorker(worker);
                     return;
                 }
 
@@ -98,12 +102,12 @@ public class SupervisorImpl implements Supervisor {
                     //and removes it from every list. Possible problem: incorrect instances are kept alive
                     // doing nothing instead of being killed.
                     System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is not responding to health check. Removing it.");
-                    removeInactiveWorker(worker);
+                    unresponsiveWorker(worker);
                 } else {
                     String res = response.body();
                     String[] splitRes = res.split(" ");
                     if (!res.startsWith("OK: ") || splitRes.length != 2) {
-                        removeInactiveWorker(worker);
+                        unresponsiveWorker(worker);
                         return;
                     }
 
@@ -114,6 +118,38 @@ public class SupervisorImpl implements Supervisor {
                 
             }).start();
         }
+    }
+
+    private void unresponsiveWorker(SupervisedWorker worker) {
+        // move worker away
+        WorkerPool originalPool = this.pools.get(worker.getWorkerPoolType());
+        originalPool.sendWorkerToPool(worker, this.schrodingerPool);
+
+        // move back in or terminate (opening the box)
+        boolean isAlive = false;
+        boolean removed = false;
+        for (int i = 0; i < SECOND_TOLERANCE_BEFORE_CONFIRMING_DEATH; i++) {
+            if (i > SECOND_TOLERANCE_BEFORE_CONFIRMING_DEATH / 10 && !removed) {
+                // allow autoscaling to replace the instance
+                this.workers.remove(worker);
+                removed = true;
+            }
+            HttpResponse<String> response = healthCheck(worker.getInstance().getPublicIpAddress(), Duration.ofSeconds(5));
+            if (response != null && response.statusCode() == 200) {
+                isAlive = true;
+                break;
+            }
+        }
+        if (isAlive) {
+            WorkerPool newPool = this.pools.get(worker.getWorkerPoolType());
+            schrodingerPool.sendWorkerToPool(worker, newPool);
+            this.workers.put(worker, newPool);
+
+        } else {
+            AutoScaler.getInstance().terminateInstance(worker.getInstance());
+            removeInactiveWorker(worker);
+        }
+
     }
 
     public boolean registerActiveInstance(Instance inst) {
@@ -168,29 +204,29 @@ public class SupervisorImpl implements Supervisor {
         // Push workers in the MEDIUM pool
         WorkerPool pool = this.pools.get(WorkerPoolType.MEDIUM);
         SupervisedWorker worker = pool.getAvailableWorker(cost);
-        if (worker == null) {
-            return null;
+        if (worker != null) {
+            return worker;
         }
 
         // Push workers in the HIGH pool (must be very few that actually can this load)
         pool = this.pools.get(WorkerPoolType.HIGH);
         worker = pool.getAvailableWorker(cost);
-        if (worker == null) {
-            return null;
+        if (worker != null) {
+            return worker;
         }
 
         // Push workers in the LOW pool (they may be new ones, that responded to the demand)
         pool = this.pools.get(WorkerPoolType.LOW);
         worker = pool.getAvailableWorker(cost);
-        if (worker == null) {
-            return null;
+        if (worker != null) {
+            return worker;
         }
 
         // No workers available, check if there are any workers that should be terminating soon
         pool = this.pools.get(WorkerPoolType.TERMINATING);
         worker = pool.getAvailableWorker(cost);
-        if (worker == null) {
-            return null;
+        if (worker != null) {
+            return worker;
         }
 
         // No worker is available in order to preserve a good load balance, use lambda functions
@@ -213,10 +249,9 @@ public class SupervisorImpl implements Supervisor {
         if (pool == null) {
             throw new RuntimeException("Worker not found in any pool");
         }
-        WorkerPool terminatingPool = this.pools.get(WorkerPoolType.TERMINATING);
 
-        pool.sendWorkerToPool(worker, terminatingPool);
-        this.workers.put(worker, terminatingPool);
+        pool.sendWorkerToPool(worker, this.terminatingPool);
+        this.workers.put(worker, this.terminatingPool);
     }
 
     public PriorityQueue<SupervisedWorker> getFreeWorkers() {

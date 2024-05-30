@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.cnv.loadbalancer.autoscaler;
 
+import java.util.Objects;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -10,12 +12,9 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
-import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.Reservation;
-import com.amazonaws.services.ec2.model.RunInstancesRequest;
-import com.amazonaws.services.ec2.model.RunInstancesResult;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.ec2.model.*;
 
+import com.amazonaws.waiters.WaiterParameters;
 import pt.ulisboa.tecnico.cnv.loadbalancer.LoadBalancer;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisedWorker;
 import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.Supervisor;
@@ -28,6 +27,7 @@ public class AutoScaler {
     private static String SEC_GROUP_ID;
 
     private final static int AUTO_SCALER_RATE = 10000;
+    private final static int MAX_WAIT_ITERS = 30; // resolves to 30 seconds waiting for instance to be running
     private static AutoScaler instance = null;
     private final AmazonEC2 ec2Client;
 
@@ -75,6 +75,9 @@ public class AutoScaler {
         // Fetch all instances
         for (Reservation reservation : ec2Client.describeInstances().getReservations()) {
             for (Instance instance : reservation.getInstances()) {
+                if (instance.getPublicIpAddress() == null) {
+                    continue;
+                }
                 supervisor.registerActiveInstance(instance);
             }
         } 
@@ -82,15 +85,44 @@ public class AutoScaler {
         new Thread(() -> {
             while (true) {
                 try {
-                    Thread.sleep(AUTO_SCALER_RATE);
                     this.scaleUpHandler();
                     this.scaleDownHandler();
                     this.terminateInstHandler();
+                    Thread.sleep(AUTO_SCALER_RATE);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
         }).start();
+    }
+
+    private Instance waitUntilRunning(Instance inst)  {
+        if (inst.getState().getCode() == 16) {
+            return inst;
+        }
+        Instance instance = null;
+        try {
+            boolean running = false;
+            int iter = MAX_WAIT_ITERS;
+            while (!running && iter > 0) {
+                DescribeInstancesRequest describeRequest = new DescribeInstancesRequest();
+                describeRequest.getInstanceIds().add(inst.getInstanceId());
+                DescribeInstancesResult describeResult = ec2Client.describeInstances(describeRequest);
+                Optional<Instance> optInstance = describeResult.getReservations().stream().flatMap(reservation -> reservation.getInstances().stream()).filter(i -> Objects.equals(i.getInstanceId(), inst.getInstanceId())).findFirst();
+                if (optInstance.isPresent()) {
+                    instance = optInstance.get();
+                    InstanceState state = instance.getState();
+                    running = state.getCode() == 16; // 16: running
+                }
+                if (!running) {
+                    Thread.sleep(1000); // Wait 1 seconds before checking again
+                }
+                iter -= 1;
+            }
+        } catch (InterruptedException ie) {
+            System.out.println("No longer waiting for instance " + inst.getInstanceId());
+        }
+        return instance;
     }
 
     public void scaleUpHandler() {
@@ -114,8 +146,13 @@ public class AutoScaler {
             RunInstancesResult runInstancesResult = this.ec2Client.runInstances(runInstancesRequest);
             inst = runInstancesResult.getReservation().getInstances().stream()
                     .filter(i -> !existingInstancesIds.contains(i.getInstanceId()))
+                    .filter(i -> i.getState().getCode() == 16 || i.getState().getCode() == 0) // 0: pending or 16: running
                     .collect(Collectors.toList()).get(0);
-            supervisor.registerActiveInstance(inst);
+            inst = waitUntilRunning(inst);
+            if (inst != null && inst.getState().getCode() == 16) {  // 16: running
+                supervisor.registerActiveInstance(inst);
+            }
+
         } catch (AmazonServiceException ase) {
                 System.out.println("Caught Exception: " + ase.getMessage());
                 System.out.println("Reponse Status Code: " + ase.getStatusCode());
@@ -135,19 +172,25 @@ public class AutoScaler {
         Supervisor supervisor = SupervisorImpl.getInstance();
         PriorityQueue<SupervisedWorker> queue = supervisor.getFreeToRemoveWorkers();
         for (SupervisedWorker worker : queue) {
-            try {
-                System.out.println("Terminating the instance.");
-                TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
-                termInstanceReq.withInstanceIds(worker.getInstance().getInstanceId());
-                this.ec2Client.terminateInstances(termInstanceReq);
-            } catch (AmazonServiceException ase) {
-                    System.out.println("Caught Exception: " + ase.getMessage());
-                    System.out.println("Reponse Status Code: " + ase.getStatusCode());
-                    System.out.println("Error Code: " + ase.getErrorCode());
-                    System.out.println("Request ID: " + ase.getRequestId());
-                    continue;
-            }
+            terminateInstance(worker.getInstance());
             supervisor.removeInactiveWorker(worker);
+        }
+    }
+
+    public void terminateInstance(Instance instance) {
+        if (instance == null) {
+            return;
+        }
+        try {
+            System.out.println("Terminating the instance with address: " + instance.getPublicIpAddress());
+            TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
+            termInstanceReq.withInstanceIds(instance.getInstanceId());
+            this.ec2Client.terminateInstances(termInstanceReq);
+        } catch (AmazonServiceException ase) {
+            System.out.println("Caught Exception: " + ase.getMessage());
+            System.out.println("Reponse Status Code: " + ase.getStatusCode());
+            System.out.println("Error Code: " + ase.getErrorCode());
+            System.out.println("Request ID: " + ase.getRequestId());
         }
     }
 }

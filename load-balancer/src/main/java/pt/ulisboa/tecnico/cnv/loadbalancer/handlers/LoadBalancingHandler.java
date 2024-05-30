@@ -13,7 +13,11 @@ import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -24,6 +28,9 @@ import com.amazonaws.services.lambda.AWSLambda;
 import com.amazonaws.services.lambda.AWSLambdaClient;
 import com.amazonaws.services.lambda.model.InvokeRequest;
 import com.amazonaws.services.lambda.model.InvokeResult;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
@@ -107,32 +114,79 @@ public class LoadBalancingHandler implements HttpHandler {
         return new URL("http", newAddress, WORKER_PORT, file);
     }
 
-    private void forwardWithLambda(InputStream bodyStream, HttpExchange exchange) {
+    private Map<String, String> getImageProcLambdaEvent(InputStream bodyStream) {
+        Map<String, String> event = new HashMap<>();
+        String result = new BufferedReader(new InputStreamReader(bodyStream)).lines().collect(Collectors.joining("\n"));
+        String[] resultSplits = result.split(",");
+        String format = resultSplits[0].split("/")[1].split(";")[0];
+
+        event.put("body", resultSplits[1]);
+        event.put("format", format);
+
+        return event;
+    }
+
+    private Map<String, String> getRaytracerLambdaEvent(HttpExchange exchange, InputStream bodyStream) throws IOException {
+        // get request arguments to initialize the event map
+        URI requestedUri = exchange.getRequestURI();
+        String query = requestedUri.getRawQuery();
+        Map<String, String> event = queryToMap(query);
+
+        Map<String, Object> body = new ObjectMapper().readValue(bodyStream, new TypeReference<Map<String, Object>>() {});
+        byte[] input = ((String) body.get("scene")).getBytes();
+        Base64.Encoder encoder = Base64.getEncoder();
+        event.put("input", encoder.encodeToString(input));
+
+        byte[] texmap = null;
+        if (body.containsKey("texmap")) {
+            // Convert ArrayList<Integer> to byte[]
+            ArrayList<Integer> texmapBytes = (ArrayList<Integer>) body.get("texmap");
+            texmap = new byte[texmapBytes.size()];
+            for (int i = 0; i < texmapBytes.size(); i++) {
+                texmap[i] = texmapBytes.get(i).byteValue();
+            }
+            event.put("texmap", encoder.encodeToString(texmap));
+        }
+
+        return event;
+    }
+
+    private void forwardWithLambda(InputStream bodyStream, HttpExchange exchange) throws IOException {
         String functionName = null;
+        Map<String, String> event;
+
         if (exchange.getRequestURI().getPath().startsWith("/blurimage") || exchange.getRequestURI().getPath().startsWith("/enhanceimage")) {
             functionName = "imageproc-lambda";
+            event = getImageProcLambdaEvent(bodyStream);
         } else if (exchange.getRequestURI().getPath().startsWith("/raytracer")) {
             functionName = "raytracer-lambda";
+            event = getRaytracerLambdaEvent(exchange, bodyStream);
         } else {
             return;
         }
 
-        String json = new BufferedReader(new InputStreamReader(bodyStream)).lines().collect(Collectors.joining("\n"));
+
         InvokeRequest request = new InvokeRequest()
                 .withFunctionName(functionName)
-                .withPayload(json);
-                
+                .withPayload(new Gson().toJson(event));
+
         InvokeResult response = lambda.invoke(request);
         if (response.getStatusCode() != 200) {
             throw new RuntimeException("Lambda invocation failed");
         }
 
-        String responseBody = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(response.getPayload().array()))).lines().collect(Collectors.joining("\n"));
-        
+        String output;
+        Charset charset = StandardCharsets.UTF_8;
+        if (functionName.equals("imageproc-lambda")) {
+            output = String.format("data:image/%s;base64,%s", event.get("format"), charset.decode(response.getPayload()).toString());
+        } else {
+            output = String.format("data:image/bmp;base64,%s", charset.decode(response.getPayload()).toString());
+        }
+
         try {
-            exchange.sendResponseHeaders(200, responseBody.length());
+            exchange.sendResponseHeaders(200, output.length());
             OutputStream os = exchange.getResponseBody();
-            os.write(responseBody.getBytes());
+            os.write(output.getBytes());
             os.close();
         } catch (IOException e) {
             throw new RuntimeException(e);

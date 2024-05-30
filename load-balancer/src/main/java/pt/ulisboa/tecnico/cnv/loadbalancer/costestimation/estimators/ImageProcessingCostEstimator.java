@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.estimators;
 
-import java.awt.*;
 import java.util.List;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -14,21 +13,16 @@ public class ImageProcessingCostEstimator extends CostEstimator {
 
 
     public ImageProcessingCostEstimator(Type type, String model) {
-        super(type);
-        this.setSerializedModelTableName(type);
+        super(type, String.format("%s-%s", IMAGE_PROCESSING_MODEL_TABLE_BASE, type.toString()));
         this.regressor = LinearRegressor.fromModel(model);
     }
 
     public ImageProcessingCostEstimator(Type type) {
-        super(type);
-        this.setSerializedModelTableName(type);
+        super(type, String.format("%s-%s", IMAGE_PROCESSING_MODEL_TABLE_BASE, type.toString()));
+
         if (!this.loadModel()) {
             this.regressor = new LinearRegressor(ImageProcessingFeatureExtractor.NUM_FEATURES);
         }
-    }
-
-    private void setSerializedModelTableName(Type type) {
-        this.SERIALIZED_MODEL_TABLE_NAME = String.format("%s-%s", IMAGE_PROCESSING_MODEL_TABLE_BASE, type.toString());
     }
 
     @Override

@@ -39,8 +39,11 @@ public abstract class CostEstimator {
     }
     private final Type type;
 
-    public CostEstimator(Type type) {
+    public CostEstimator(Type type, String tableName) {
         this.type = type;
+        this.SERIALIZED_MODEL_TABLE_NAME = tableName;
+        this.initDb();
+        this.initTable();
     }
 
     // interface
@@ -70,7 +73,7 @@ public abstract class CostEstimator {
     private AmazonDynamoDB dynamoDb;
     protected LinearRegressor regressor;
     private Long lastModelId = -1L;
-    protected String SERIALIZED_MODEL_TABLE_NAME;
+    private final String SERIALIZED_MODEL_TABLE_NAME;
     
     protected IncrementalUpdateType updateType = IncrementalUpdateType.BATCH;
 
@@ -90,7 +93,8 @@ public abstract class CostEstimator {
             return;
         }
 
-        CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(this.SERIALIZED_MODEL_TABLE_NAME)
+        CreateTableRequest createTableRequest = new CreateTableRequest()
+                .withTableName(this.SERIALIZED_MODEL_TABLE_NAME)
                 .withKeySchema(new KeySchemaElement().withAttributeName("id").withKeyType(KeyType.HASH))
                 .withAttributeDefinitions(new AttributeDefinition().withAttributeName("id").withAttributeType("N"))
                 .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(5L).withWriteCapacityUnits(5L));

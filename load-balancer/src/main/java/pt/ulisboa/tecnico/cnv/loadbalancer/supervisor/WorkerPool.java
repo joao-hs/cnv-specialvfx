@@ -9,7 +9,7 @@ import java.util.TreeSet;
  */
 public class WorkerPool {
     public enum WorkerPoolType {
-        LOW, MEDIUM, HIGH, FULL, TERMINATING
+        LOW, MEDIUM, HIGH, FULL, TERMINATING, SCHRODINGER
     }
     // CPU usage thresholds -- e.g. low is below 30% CPU usage
     public static final double LOW_CPU_USAGE = 0.30;

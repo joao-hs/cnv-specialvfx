@@ -12,14 +12,12 @@ public class ImageRenderingCostEstimator extends CostEstimator {
     private static final String IMAGE_RENDERING_MODEL_TABLE = "raytracer-models";
 
     public ImageRenderingCostEstimator(String model) {
-        super(Type.raytrace);
-        this.SERIALIZED_MODEL_TABLE_NAME = IMAGE_RENDERING_MODEL_TABLE;
+        super(Type.raytrace, IMAGE_RENDERING_MODEL_TABLE);
         this.regressor = LinearRegressor.fromModel(model);
     }
 
     public ImageRenderingCostEstimator() {
-        super(Type.raytrace);
-        this.SERIALIZED_MODEL_TABLE_NAME = IMAGE_RENDERING_MODEL_TABLE;
+        super(Type.raytrace, IMAGE_RENDERING_MODEL_TABLE);
         if (!this.loadModel()) {
             this.regressor = new LinearRegressor(RaytracerFeatureExtractor.NUM_FEATURES);
         }
