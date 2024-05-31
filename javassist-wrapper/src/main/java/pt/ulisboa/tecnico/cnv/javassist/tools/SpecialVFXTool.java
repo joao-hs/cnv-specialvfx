@@ -18,9 +18,6 @@ public class SpecialVFXTool extends AbstractJavassistTool {
      */
     private static final Map<Long, Long> ninsts = new ConcurrentHashMap<>();
 
-    /*
-     * Log entry format: requestID,nmethods,nblocks,ninsts
-     */
     private static final ConcurrentLinkedQueue<String> log = new ConcurrentLinkedQueue<>();
     private static final Object logLock = new Object();
 
@@ -44,6 +41,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             requestId = localRequestId.incrementAndGet();
             threadToRequest.put(Thread.currentThread().getId(), requestId);
             requestIdToFeatures.put(requestId, "");
+            requestIdToType.put(requestId, -1);
             return;
         }
         requestId = Long.parseLong(headersValue.get(0));
@@ -60,6 +58,8 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             requestIdToType.put(requestId, 1);
         } else if (t.getRequestURI().getPath().startsWith("/raytracer")) {
             requestIdToType.put(requestId, 2);
+        } else {
+            requestIdToType.put(requestId, -1);
         }
 
     }
@@ -83,7 +83,7 @@ public class SpecialVFXTool extends AbstractJavassistTool {
             return;
         }
         String entry;
-        entry = String.format("%d|%d|%s|%d", requestId, requestIdToType.get(requestId), requestIdToFeatures.get(requestId), Math.round(ninsts.get(requestId) / 1e6));
+        entry = String.format("%d|%s|%s|%d", requestId, requestIdToType.get(requestId), requestIdToFeatures.get(requestId), Math.round(ninsts.get(requestId) / 1e6));
         ninsts.remove(requestId);
         log.add(entry);
 

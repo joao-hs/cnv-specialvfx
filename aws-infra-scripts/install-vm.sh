@@ -56,10 +56,8 @@ ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_D
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd
 
 # Setup rc.local files.
-worker_script="cd $REMOTE_REPO_ROOT; ./scripts/run_instrumented.sh SpecialVFXTool --imageproc > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-worker.err"
-cmd="sudo systemctl daemon-reload; sudo systemctl start rc-local.service"
+cmd="sudo systemctl daemon-reload; sudo systemctl enable rc-local.service"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$INSTANCE_DNS $cmd
 
-lb_script="cd $REMOTE_REPO_ROOT; ./scripts/run_lb.sh > logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-lb.log 2> logs/\\\"\\\$(date +%Y%m%d%H%M%S)\\\"-lb.err"
-cmd="sudo systemctl daemon-reload; sudo systemctl start rc-local.service"
+cmd="sudo systemctl daemon-reload; sudo systemctl enable rc-local.service"
 ssh -o StrictHostKeyChecking=no -i $AWS_EC2_SSH_KEYPAR_PATH ec2-user@$LB_DNS $cmd

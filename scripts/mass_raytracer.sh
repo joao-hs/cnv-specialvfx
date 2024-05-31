@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <no_times_per_scene> <port>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <no_times_per_scene> <ip> <port>"
     exit 1
 fi
 
@@ -11,7 +11,7 @@ for scene in raytracer/resources/*.txt; do
     bitmap=$(echo $scene | sed 's/txt$/bmp/')
     for ((i=0; i<$1; i++)); do
         start_time=$(($(date +%s%N)))
-        ./scripts/curl_raytracer.sh $scene $scene_name.bmp --texmap $bitmap --port $2
+        ./scripts/curl_raytracer.sh $scene $scene_name.bmp --texmap $bitmap --ip $2 --port $3
         end_time=$(($(date +%s%N)))
         elapsed_time=$(($end_time-$start_time))
         count=$((count+1))

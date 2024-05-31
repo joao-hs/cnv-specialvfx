@@ -22,5 +22,11 @@ done
 echo "Smoke testing..."
 $DIR/../scripts/smoke_test.sh --ip $INSTANCE_DNS --port 8000
 
+LB_DNS=$(cat $LB_DNS_FILE)
+while ! nc -z $LB_DNS 8000; do
+	echo "Waiting for $LB_DNS:8000..."
+	sleep 0.5
+done
+
 # echo "Smoke testing LB..."
-# TODO: smoke test LB
+$DIR/../scripts/smoke_test.sh --ip $LB_DNS --port 8000

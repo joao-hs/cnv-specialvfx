@@ -40,8 +40,8 @@ IP="127.0.0.1"
 PORT="8000"
 TEXMAP=""
 _DIRNAME=$(dirname $0)
-_TMP_DIR="$_DIRNAME/tmp"
-_OUT_DIR="$_DIRNAME/output"
+_TMP_DIR="$_DIRNAME/tmp/"
+_OUT_DIR="$_DIRNAME/output/"
 _PAYLOAD_FILE="$_TMP_DIR/payload.json"
 
 # Create the temporary directory

@@ -6,7 +6,6 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.CostEstimator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.LinearRegressor;
-import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.ImageProcessingFeatureExtractor;
 
 public class ImageProcessingCostEstimator extends CostEstimator {
     private static final String IMAGE_PROCESSING_MODEL_TABLE_BASE = "image-processing-models";
@@ -21,7 +20,7 @@ public class ImageProcessingCostEstimator extends CostEstimator {
         super(type, String.format("%s-%s", IMAGE_PROCESSING_MODEL_TABLE_BASE, type.toString()));
 
         if (!this.loadModel()) {
-            this.regressor = new LinearRegressor(ImageProcessingFeatureExtractor.NUM_FEATURES);
+            this.regressor = LinearRegressor.createInitialCostEstimator(type);
         }
     }
 

@@ -1,7 +1,18 @@
 #!/bin/bash
 
+# if --skip turn on flag
+SKIP=false
+if [ "$1" == "--skip" ]; then
+    SKIP=true
+else
+    SKIP=false
+fi
+
 _DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source $_DIR/public_config.sh
+
+rm -rf $DIR/state
+mkdir $DIR/state
 
 # Step 1: launch a new VM instance.
 $DIR/launch-vms.sh
@@ -9,8 +20,10 @@ $DIR/launch-vms.sh
 # Step 2: install software in the VM instance.
 $DIR/install-vm.sh
 
-# Step 3: test VM instance.
-$DIR/test-vm.sh
+# Step 3: test VM instance. if not SKIP
+if [ "$SKIP" = false ]; then
+    $DIR/test-vm.sh
+fi
 
 # Step 4.1: create VM image (AIM) - Worker.
 INSTANCE_ID=$(cat $INSTANCE_ID_FILE)

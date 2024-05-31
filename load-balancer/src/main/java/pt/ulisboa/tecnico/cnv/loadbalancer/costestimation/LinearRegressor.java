@@ -13,6 +13,34 @@ import org.apache.commons.lang3.tuple.Pair;
 import com.google.gson.Gson;
 
 public class LinearRegressor {
+    public static LinearRegressor createInitialCostEstimator(CostEstimator.Type type) {
+        switch (type) {
+            case blur:
+                return new LinearRegressor(new Parameters(
+                        new double[]{0.15},
+                        0.0,
+                        1e-6,
+                        0.1
+                ));
+            case enhance:
+                return new LinearRegressor(new Parameters(
+                        new double[]{0.1},
+                        0.0,
+                        1e-6,
+                        0.1
+                ));
+            case raytrace:
+                return new LinearRegressor(new Parameters(
+                        new double[]{30.0,6.0,6.0},
+                        -10,
+                        0.001,
+                        0.01
+                ));
+            default:
+                throw new RuntimeException("No known type of cost estimator provided");
+        }
+    }
+
     public static class Parameters {
         @Expose
         public double[] weights;
@@ -45,6 +73,10 @@ public class LinearRegressor {
     private Parameters parameters;
 
     public LinearRegressor() { }
+
+    private LinearRegressor(Parameters parameters) {
+        this.parameters = parameters;
+    }
 
     public LinearRegressor(int numFeatures) {
         double[] weights = new double[numFeatures];

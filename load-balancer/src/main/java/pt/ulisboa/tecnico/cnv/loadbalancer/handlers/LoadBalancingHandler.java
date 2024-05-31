@@ -15,8 +15,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,6 +45,7 @@ import pt.ulisboa.tecnico.cnv.loadbalancer.supervisor.SupervisorImpl;
 
 public class LoadBalancingHandler implements HttpHandler {
     private static final int WORKER_PORT = LoadBalancer.WORKER_PORT;
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     private static final AWSLambda lambda = AWSLambdaClient.builder()
             .withRegion(Regions.EU_WEST_3)
@@ -83,9 +86,9 @@ public class LoadBalancingHandler implements HttpHandler {
 
         HttpRequest request = requestBuilder.build();
 
+        System.out.println(String.format("[%d](%s) Request sent to %s", requestId, sdf.format(new Date()), destination.toString()));
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        System.out.println(String.format("Forward Request to [%s] and got response code [%d]", destination.getHost(), response.statusCode()));
+        System.out.println(String.format("[%d](%s) Response: (%d) with body length %d", requestId, sdf.format(new Date()), response.statusCode(), response.body().length()));
 
         exchange.sendResponseHeaders(response.statusCode(), response.body().length());
         OutputStream os = exchange.getResponseBody();
@@ -197,6 +200,7 @@ public class LoadBalancingHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         long requestId = LoadBalancer.requestId.incrementAndGet();
+        System.out.println(String.format("[%d](%s) Received request", requestId, sdf.format(new Date())));
         if (featureExtractor == null) {
             SupervisedWorker picked = supervisor.getBestFitForCost(0);
             if (picked == null) {
@@ -220,17 +224,17 @@ public class LoadBalancingHandler implements HttpHandler {
         byte[] requestBody = exchange.getRequestBody().readAllBytes();
 
         ArrayList<Integer> features = featureExtractor.extractFeatures(new ByteArrayInputStream(requestBody), params);
-
+        System.out.println(String.format("[%d](%s) Extracted features: %s", requestId, sdf.format(new Date()), new Gson().toJson(features)));
         SupervisedWorker picked = null;
         String address = null;
         int cost = costEstimator.estimateCost(features);
-        System.out.println("Estimated cost: " + cost);
+        System.out.println(String.format("[%d](%s) Estimated Cost: %d", requestId, sdf.format(new Date()), cost));
 
         if (LoadBalancer.LOCALHOST) {
             address = "localhost";
         } else {
             picked = supervisor.getBestFitForCost(cost);
-            System.out.println("Picked instance: " + (picked == null ? "lambda" : picked.getInstance().getInstanceId()));
+            System.out.println(String.format("[%d](%s) Picked Instance: %s", requestId, sdf.format(new Date()), (picked == null ? "lambda" : picked.getInstance().getInstanceId())));
             if (picked != null) {
                 address = picked.getInstance().getPublicIpAddress();
                 supervisor.registerRequestForWorker(picked, requestId, cost);
@@ -242,6 +246,7 @@ public class LoadBalancingHandler implements HttpHandler {
                 throw new RuntimeException("No instance available to handle request");
             }
             forwardWithLambda(new ByteArrayInputStream(requestBody), exchange);
+            System.out.println(String.format("[%d](%s) Resolved!", requestId, sdf.format(new Date())));
             return;
         }
 
@@ -257,11 +262,12 @@ public class LoadBalancingHandler implements HttpHandler {
         } catch (URISyntaxException | InterruptedException e) {
             // if something goes wrong, trigger Lambda
             if (!LoadBalancer.LOCALHOST) {
+                System.out.println(String.format("[%d](%s) Something wrong, forwarding to lambda", requestId, sdf.format(new Date())));
                 forwardWithLambda(new ByteArrayInputStream(requestBody), exchange);
-                System.out.println("Error forwarding request to instance, triggered lambda instead");
             } else {
                 throw new RuntimeException(e);
             }
         }
+        System.out.println(String.format("[%d](%s) Resolved!", requestId, sdf.format(new Date())));
     }
 }

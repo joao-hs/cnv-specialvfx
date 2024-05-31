@@ -18,7 +18,7 @@ handle_request() {
     start_time=$(($(date +%s%N)))
 
     # Call curl_imageproc.sh with the load balancer address
-    ./scripts/curl_imageproc.sh "$operation" "$image" "$image_name" "$load_balancer_address"
+    ./scripts/curl_imageproc.sh $operation $image $image_name --ip $load_balancer_address
 
     end_time=$(($(date +%s%N)))
     elapsed_time=$(($end_time - $start_time))
@@ -27,15 +27,15 @@ handle_request() {
 }
 
 count=-1
-for image in imageproc/resources/*; do
+for ((i = 0; i < no_times_per_image; i++)); do
+    for image in imageproc/resources/*; do
     image_name=$(basename "$image")
-    for ((i = 0; i < no_times_per_image; i++)); do
     
-        handle_request "$operation" "$image" "$image_name" "$load_balancer_address" &
+        handle_request $operation $image $image_name $load_balancer_address &
 
         #non-linear delay
-        sleep_time=$(echo "scale=2; $RANDOM % (2^$i % 10 + 1)" | bc)
-        sleep $sleep_time
+#        sleep_time=$(echo "scale=2; $RANDOM % (2^$i % 10 + 1)" | bc)
+#        sleep $sleep_time
     done
 done
 

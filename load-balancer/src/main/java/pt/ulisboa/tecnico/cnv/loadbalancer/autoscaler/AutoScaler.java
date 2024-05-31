@@ -75,7 +75,10 @@ public class AutoScaler {
         // Fetch all instances
         for (Reservation reservation : ec2Client.describeInstances().getReservations()) {
             for (Instance instance : reservation.getInstances()) {
-                if (instance.getPublicIpAddress() == null) {
+                if (instance.getTags().stream().anyMatch(tag -> tag.getKey().equals("type") && tag.getValue().equals("load-balancer"))) {
+                    continue;
+                }
+                if (instance.getPublicIpAddress() == null || instance.getState().getCode() != 16) { // not running
                     continue;
                 }
                 supervisor.registerActiveInstance(instance);
@@ -120,7 +123,7 @@ public class AutoScaler {
                 iter -= 1;
             }
         } catch (InterruptedException ie) {
-            System.out.println("No longer waiting for instance " + inst.getInstanceId());
+            System.out.println(String.format(".(AutoScaler) [%s] No longer waiting for instance.", inst.getInstanceId()));
         }
         return instance;
     }
@@ -135,7 +138,7 @@ public class AutoScaler {
 
         Instance inst = null;
         try {
-            System.out.println("Starting a new instance.");
+            System.out.println(String.format(".(AutoScaler) Scale Up!", existingInstancesIds.toString()));
             RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
             runInstancesRequest.withImageId(AMI_ID)
                                .withInstanceType("t2.micro")
@@ -182,7 +185,7 @@ public class AutoScaler {
             return;
         }
         try {
-            System.out.println("Terminating the instance with address: " + instance.getPublicIpAddress());
+            System.out.println(String.format(".(AutoScaler) [%s] Scale Down!", instance.getInstanceId()));
             TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
             termInstanceReq.withInstanceIds(instance.getInstanceId());
             this.ec2Client.terminateInstances(termInstanceReq);

@@ -51,8 +51,8 @@ OUTPUT_FILE=$3
 IP="127.0.0.1"
 PORT="8000"
 _DIRNAME=$(dirname $0)
-_TMP_DIR="$_DIRNAME/tmp"
-_OUT_DIR="$_DIRNAME/output"
+_TMP_DIR="$_DIRNAME/tmp/"
+_OUT_DIR="$_DIRNAME/output/"
 _PAYLOAD_FILE="$_TMP_DIR/payload.json"
 
 # Create the temporary directory
@@ -82,8 +82,10 @@ done
 # Encode in Base64
 base64 $IMAGE_FILE > $_PAYLOAD_FILE
 
+image_extension="${IMAGE_FILE##*.}"
+
 # Append a formatting string
-echo -e "data:image/jpg;base64,$(cat $_PAYLOAD_FILE)" > $_PAYLOAD_FILE
+echo -e "data:image/$image_extension;base64,$(cat $_PAYLOAD_FILE)" > $_PAYLOAD_FILE
 
 # Send the request
 curl -sS -X POST http://$IP:$PORT/$PROCESSING_TYPE --data @"$_PAYLOAD_FILE" > $_TMP_DIR/$OUTPUT_FILE

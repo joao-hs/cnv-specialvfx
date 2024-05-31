@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.google.gson.Gson;
 import org.apache.commons.lang3.tuple.Pair;
 
 import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
@@ -97,7 +98,7 @@ public abstract class CostEstimator {
                 .withTableName(this.SERIALIZED_MODEL_TABLE_NAME)
                 .withKeySchema(new KeySchemaElement().withAttributeName("id").withKeyType(KeyType.HASH))
                 .withAttributeDefinitions(new AttributeDefinition().withAttributeName("id").withAttributeType("N"))
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(5L).withWriteCapacityUnits(5L));
+                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
 
         TableUtils.createTableIfNotExists(this.dynamoDb, createTableRequest);
         try {
@@ -114,7 +115,7 @@ public abstract class CostEstimator {
         String serializedModel = this.regressor.exportModel();
 
         if (LoadBalancer.LOCALHOST) {
-            System.out.println("Cost Estimator for type " + this.type.toString() + " is saving the model to disk");
+            System.out.println(String.format(".(CostEstimator) [%s] saveModel: %s", type, serializedModel));
             File localDb = new File("/tmp/SpecialVFX-local-" + SERIALIZED_MODEL_TABLE_NAME + ".db");
             try {
                 localDb.createNewFile();
@@ -132,7 +133,9 @@ public abstract class CostEstimator {
         lastModelId += 1;
         item.put("id", new AttributeValue().withN(lastModelId.toString()));
         item.put("model", new AttributeValue().withS(serializedModel));
+        item.put("ts", new AttributeValue(new Date().toString()));
         
+        System.out.println(String.format(".(CostEstimator) [%s] saveModel: %s", type, serializedModel));
         this.dynamoDb.putItem(new PutItemRequest(this.SERIALIZED_MODEL_TABLE_NAME, item));
     }
 
@@ -197,7 +200,6 @@ public abstract class CostEstimator {
             while (true) {
                 try {
                     Thread.sleep(TRAINING_UPDATE_INTERVAL);
-                    System.out.println("Cost Estimator for " + this.type.toString() + " is training now!");
                     processFreshData(fetchFreshData());
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -249,7 +251,7 @@ public abstract class CostEstimator {
                 }
                 scanner.close();
                 lastSeenRequestId = id;
-                System.out.println("Cost Estimator for type " + this.type.toString() + " is training on " + ret.size() + " new data samples");
+                System.out.println(String.format(".(CostEstimator) [%s] fetchFreshData with size: %d", type, ret.size()));
                 return ret;
             } catch (IOException e) {
                 throw  new RuntimeException(e);
@@ -257,10 +259,14 @@ public abstract class CostEstimator {
         }
 
         HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        Condition condition = new Condition()
+        Condition idCondition = new Condition()
                 .withComparisonOperator(ComparisonOperator.GT.toString())
                 .withAttributeValueList(new AttributeValue().withN(lastSeenRequestId.toString()));
-        scanFilter.put("requestId", condition);
+        Condition typeCondition = new Condition()
+            .withComparisonOperator(ComparisonOperator.EQ.toString())
+            .withAttributeValueList(new AttributeValue().withN(Integer.toString(this.type.ordinal())));
+        scanFilter.put("requestId", idCondition);
+        scanFilter.put("type", typeCondition);
 
         // Scan the table
         ScanRequest scanRequest = new ScanRequest()
@@ -269,11 +275,11 @@ public abstract class CostEstimator {
 
         // Process Result
         ScanResult scanResult = this.dynamoDb.scan(scanRequest);
+        System.out.println(String.format(".(CostEstimator) [%s] fetchFreshData with size: %d", type, scanResult.getCount()));
         List<Pair<List<Integer>, Integer>> freshData = new ArrayList<>(scanResult.getCount());
         if (scanResult.getCount() == 0) {
             return freshData;
         }
-
         scanResult.getItems().forEach(item -> {
             Pair<List<Integer>, Integer> dataPoint;
             List<Integer> features = Stream.of(item.get("features").getS().split(","))
@@ -304,17 +310,17 @@ public abstract class CostEstimator {
         boolean updated = false;
         switch (updateType) {
             case STOCHASTIC:
-                System.out.println("Using Stochastic Incremental Updates for " + data.size() + " new samples");
-                System.out.println("Old loss: " + LinearRegressor.loss(data, this.regressor));
+                System.out.println(String.format(".(CostEstimator) [%s] Using Stochastic Incremental Updates for %d new samples", type, data.size()));
+                System.out.println(String.format(".(CostEstimator) [%s] Old loss: %f", type, LinearRegressor.loss(data, this.regressor)));
                 data.forEach(this::stochasticIncrementalUpdate);
-                System.out.println("New loss: " + LinearRegressor.loss(data, this.regressor));
+                System.out.println(String.format(".(CostEstimator) [%s] New loss: %f", type, LinearRegressor.loss(data, this.regressor)));
                 updated = true;
                 break;
             case BATCH:
-                System.out.println("Using Batch Incremental Update for " + data.size() + " new samples");
-                System.out.println("Old loss: " + LinearRegressor.loss(data, this.regressor));
+                System.out.println(String.format(".(CostEstimator) [%s] Using Batch Incremental Updates for %d new samples", type, data.size()));
+                System.out.println(String.format(".(CostEstimator) [%s] Old loss: %f", type, LinearRegressor.loss(data, this.regressor)));
                 this.batchIncrementalUpdate(data);
-                System.out.println("New loss: " + LinearRegressor.loss(data, this.regressor));
+                System.out.println(String.format(".(CostEstimator) [%s] New loss: %f", type, LinearRegressor.loss(data, this.regressor)));
                 updated = true;
                 break;
             default:

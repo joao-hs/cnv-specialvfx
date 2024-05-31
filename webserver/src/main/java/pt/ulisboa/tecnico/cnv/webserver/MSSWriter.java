@@ -18,6 +18,7 @@ import pt.ulisboa.tecnico.cnv.javassist.tools.SpecialVFXTool;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -107,10 +108,12 @@ public class MSSWriter {
     private Map<String, AttributeValue> newItemFromLogEntry(String logEntry) {
         Map<String, AttributeValue> item = new HashMap<>();
         String[] splitEntry = logEntry.split("\\|");
+        System.out.println(logEntry);
         item.put("id", new AttributeValue().withN(splitEntry[0]));
         item.put("type", new AttributeValue().withN(splitEntry[1]));
         item.put("features", new AttributeValue(splitEntry[2]));
         item.put("cost", new AttributeValue().withN(splitEntry[3]));
+        item.put("ts", new AttributeValue(new Date().toString()));
         return item;
     }
 }

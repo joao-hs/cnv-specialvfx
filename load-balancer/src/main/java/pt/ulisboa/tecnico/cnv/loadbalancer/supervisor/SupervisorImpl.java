@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 public class SupervisorImpl implements Supervisor {
     private static SupervisorImpl instance = null;
     static final int HEALTH_INTERVAL = 5000;
-    private static final int SECONDS_TO_WAIT_FOR_STARTUP = 180;
+    private static final int SECONDS_TO_WAIT_FOR_STARTUP = 30;
     private static final int SECOND_TOLERANCE_BEFORE_CONFIRMING_DEATH = 30;
     private static final int WORKER_PORT = LoadBalancer.WORKER_PORT;
     
@@ -51,7 +51,7 @@ public class SupervisorImpl implements Supervisor {
     @Override
     public void start() {
         new Thread(() -> {
-            System.out.println("Starting Health checker");
+            System.out.println(String.format(".(Supervisor) Starting Health Checker"));
             while (true) {
                 try {
                     Thread.sleep(SupervisorImpl.HEALTH_INTERVAL);
@@ -92,7 +92,7 @@ public class SupervisorImpl implements Supervisor {
                 HttpResponse<String> response = healthCheck(worker.getInstance().getPublicIpAddress(), Duration.ofSeconds(2));
                 
                 if (response == null) {
-                    System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is unreachable. May be dead or with high latency.");
+                    System.out.println(String.format(".(Supervisor) [%s] Worker is unreachable. May be dead or with high latency.", worker.getInstance().getPublicIpAddress()));
                     unresponsiveWorker(worker);
                     return;
                 }
@@ -101,7 +101,7 @@ public class SupervisorImpl implements Supervisor {
                     //unhandled case: the supervisor assumes that in this case the instance is dead
                     //and removes it from every list. Possible problem: incorrect instances are kept alive
                     // doing nothing instead of being killed.
-                    System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is not responding to health check. Removing it.");
+                    System.out.println(String.format(".(Supervisor) [%s] Worker is not responding to health check. Removing it.", worker.getInstance().getPublicIpAddress()));
                     unresponsiveWorker(worker);
                 } else {
                     String res = response.body();
@@ -113,7 +113,7 @@ public class SupervisorImpl implements Supervisor {
 
                     double cpuUsage = Double.parseDouble(splitRes[1]);
                     worker.updateCpuUsage(cpuUsage);
-                    System.out.println("Worker " + worker.getInstance().getPublicIpAddress() + " is healthy. CPU Usage: " + cpuUsage);
+                    System.out.println(String.format(".(Supervisor) [%s] OK | CPU Usage: %f", worker.getInstance().getPublicIpAddress(), cpuUsage));
                 }
                 
             }).start();
@@ -164,13 +164,13 @@ public class SupervisorImpl implements Supervisor {
         for (int i = 0; i < SECONDS_TO_WAIT_FOR_STARTUP; i++) {
             HttpResponse<String> response = healthCheck(worker.getInstance().getPublicIpAddress(), Duration.ofSeconds(1));
             if (response != null && response.statusCode() / 100 == 2) {
-                System.out.println("Instance " + worker.getInstance().getPublicIpAddress() + " is responding. Adding to worker pool.");
+                System.out.println(String.format(".(Supervisor) [%s] Worker is responding. Adding to worker pool.", worker.getInstance().getPublicIpAddress()));
                 this.lowPool.addWorker(worker);
                 this.workers.put(worker, lowPool);
                 return true;
             }
 
-            System.out.println("Instance " + worker.getInstance().getPublicIpAddress() + " is unreachable. Keep trying for " + (SECONDS_TO_WAIT_FOR_STARTUP - i) + " seconds");
+            System.out.println(String.format(".(Supervisor) [%s] Worker is unreachable. Keep trying for %d seconds", worker.getInstance().getPublicIpAddress(), SECONDS_TO_WAIT_FOR_STARTUP - i));
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {

@@ -6,7 +6,6 @@ import org.apache.commons.lang3.tuple.Pair;
 
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.CostEstimator;
 import pt.ulisboa.tecnico.cnv.loadbalancer.costestimation.LinearRegressor;
-import pt.ulisboa.tecnico.cnv.loadbalancer.featureextractor.RaytracerFeatureExtractor;
 
 public class ImageRenderingCostEstimator extends CostEstimator {
     private static final String IMAGE_RENDERING_MODEL_TABLE = "raytracer-models";
@@ -19,7 +18,7 @@ public class ImageRenderingCostEstimator extends CostEstimator {
     public ImageRenderingCostEstimator() {
         super(Type.raytrace, IMAGE_RENDERING_MODEL_TABLE);
         if (!this.loadModel()) {
-            this.regressor = new LinearRegressor(RaytracerFeatureExtractor.NUM_FEATURES);
+            this.regressor = LinearRegressor.createInitialCostEstimator(Type.raytrace);
         }
     }
 

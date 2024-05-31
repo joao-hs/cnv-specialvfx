@@ -3,10 +3,24 @@
 _DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source $_DIR/public_config.sh
 
+if  [ -f "$IMAGE_ID_FILE" ]; then
+	_WORKER_IMAGE_ID=$(cat $IMAGE_ID_FILE)
+else
+	_WORKER_IMAGE_ID="resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+fi
+
+if [ -f "$LB_IMAGE_ID_FILE" ]; then
+	_LB_IMAGE_ID=$(cat $LB_IMAGE_ID_FILE)
+else
+	_LB_IMAGE_ID="resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+fi
+
+
 # Run new instance (worker)
 aws ec2 run-instances \
-	--image-id $(cat $IMAGE_ID_FILE) \
+  	--image-id $_WORKER_IMAGE_ID \
 	--instance-type t2.micro \
+	--tag-specifications "ResourceType=instance,Tags=[{Key=type,Value=worker}]" \
 	--key-name $AWS_KEYPAIR_NAME \
 	--security-group-ids $AWS_SECURITY_GROUP \
 	--monitoring Enabled=true | jq -r ".Instances[0].InstanceId" > $INSTANCE_ID_FILE
@@ -15,8 +29,9 @@ echo "New instance (worker) with id $INSTANCE_ID."
 
 # Run new instance (load balancer)
 aws ec2 run-instances \
-	--image-id $(cat $LB_IMAGE_ID_FILE) \
+	--image-id $_LB_IMAGE_ID \
 	--instance-type t2.micro \
+	--tag-specifications "ResourceType=instance,Tags=[{Key=type,Value=load-balancer}]" \
 	--key-name $AWS_KEYPAIR_NAME \
 	--security-group-ids $AWS_SECURITY_GROUP \
 	--monitoring Enabled=true | jq -r ".Instances[0].InstanceId" > $LB_ID_FILE

@@ -2,4 +2,4 @@
 
 cd /home/ec2-user/cnv24-g03/ # project path
 source ./aws-infra-scripts/env.sh # load environment variables
-./scripts/run_instrumented.sh SpecialVFXTool --imageproc > logs/$(date +%Y%m%d%H%M%S)-worker.log 2> logs/$(date +%Y%m%d%H%M%S)-worker.err # run the load balancer
+./scripts/run_instrumented.sh SpecialVFXTool --imageproc > logs/$(date +%Y%m%d%H%M%S)-worker.log 2> logs/$(date +%Y%m%d%H%M%S)-worker.err # run the worker

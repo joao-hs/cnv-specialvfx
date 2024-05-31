@@ -6,6 +6,7 @@ This project contains three sub-projects:
 2. `imageproc` - the BlurImage and EnhanceImage workloads
 3. `webserver` - the web server exposing the functionality of the workloads
 4. `javassist-wrapper` - a wrapper around the workloads to retrieve metrics about the execution of the workloads
+5. `load-balancer` - a load balancer to distribute the requests between the web servers (auto-scaler included)
 
 Refer to the `README.md` files of the sub-projects to get more details about each specific sub-project.
 
@@ -15,5 +16,6 @@ Refer to the `README.md` files of the sub-projects to get more details about eac
 2. Run `mvn clean package`
 
 ### Architecture
-The javassist tool stores the metrics in a map, associated with a unique identifier for each request.
-The web server MSSWriter class is responsible for fetching this map from time to time and writing the metrics to a file (or any other output stream). Each fetch to this map will remove the fetched metrics from the map to preserve memory.
+The `SpecialVFXTool` is a Javassist Tool that is used to write instrumentation metrics in the Metric Storage System (MSS). These will be read by each `CostEstimator` to better fit the regression model.
+The `FeatureExtractor` is responsible for looking at the request parameters and extracting relevant information that may indicate the cost of the request (a priori to its execution)
+The `Supervisor` is responsible for checking the health and real-time usage of the workers. With this information, it will rearrange the workers in theoretical worker pools, that will be useful in the balancing algorithm.
